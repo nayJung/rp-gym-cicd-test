@@ -288,6 +288,7 @@ services:
 
       EUREKA_INSTANCE_HOSTNAME: user-service-blue
       EUREKA_SERVER_URL: http://eureka-server-blue:19000/eureka/
+      EUREKA_PREFER_IP_ADDRESS: "false"
 
       JWT_SECRET: ${JWT_SECRET}
 
@@ -329,6 +330,7 @@ services:
 
       EUREKA_INSTANCE_HOSTNAME: user-service-green
       EUREKA_SERVER_URL: http://eureka-server-green:19000/eureka/
+      EUREKA_PREFER_IP_ADDRESS: "false"
 
       JWT_SECRET: ${JWT_SECRET}
 
@@ -365,7 +367,9 @@ services:
 
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
 
+      EUREKA_INSTANCE_HOSTNAME: health-service-blue
       EUREKA_SERVER_URL: http://eureka-server-blue:19000/eureka/
+      EUREKA_PREFER_IP_ADDRESS: "false"
 
     expose:
       - "19011"
@@ -398,7 +402,9 @@ services:
 
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
 
+      EUREKA_INSTANCE_HOSTNAME: health-service-green
       EUREKA_SERVER_URL: http://eureka-server-green:19000/eureka/
+      EUREKA_PREFER_IP_ADDRESS: "false"
 
     expose:
       - "19011"
@@ -434,7 +440,9 @@ services:
 
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
 
+      EUREKA_INSTANCE_HOSTNAME: game-service-blue
       EUREKA_SERVER_URL: http://eureka-server-blue:19000/eureka/
+      EUREKA_PREFER_IP_ADDRESS: "false"
 
     expose:
       - "19012"
@@ -472,7 +480,9 @@ services:
 
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
 
+      EUREKA_INSTANCE_HOSTNAME: game-service-green
       EUREKA_SERVER_URL: http://eureka-server-green:19000/eureka/
+      EUREKA_PREFER_IP_ADDRESS: "false"
 
     expose:
       - "19012"
