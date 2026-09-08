@@ -15,9 +15,7 @@ if [ ! -f "${NGINX_CONF}" ]; then
     exit 1
 fi
 
-CURRENT=$(grep -E "server gateway-(blue|green):19001;" "${NGINX_CONF}" \
-    | awk '{print $2}' \
-    | cut -d':' -f1)
+CURRENT=$(grep -E "server gateway-(blue|green):19001;" "${NGINX_CONF}" | awk '{print $2}' | cut -d':' -f1)
 
 if [ "${CURRENT}" = "gateway-blue" ]; then
     TARGET="green"
@@ -52,26 +50,20 @@ BEFORE_SERVICES=(
 
 echo "Build & Start ${TARGET}"
 
-docker compose \
-    -f "${COMPOSE_FILE}" \
-    up -d --build "${TARGET_SERVICES[@]}"
+docker compose -f "${COMPOSE_FILE}" up -d --build "${TARGET_SERVICES[@]}"
 
 echo "Checking ${TARGET} containers..."
 
 for SERVICE in "${TARGET_SERVICES[@]}"
 do
-    CONTAINER=$(docker compose \
-        -f "${COMPOSE_FILE}" \
-        ps -q "${SERVICE}")
+    CONTAINER=$(docker compose -f "${COMPOSE_FILE}" ps -q "${SERVICE}")
 
     if [ -z "${CONTAINER}" ]; then
         echo "Container not found: ${SERVICE}"
         exit 1
     fi
 
-    STATUS=$(docker inspect \
-        --format '{{.State.Status}}' \
-        "${CONTAINER}")
+    STATUS=$(docker inspect --format '{{.State.Status}}' "${CONTAINER}")
 
     if [ "${STATUS}" != "running" ]; then
         echo "Container is not running: ${SERVICE}"
@@ -92,8 +84,7 @@ check_health() {
 
     for RETRY in {1..30}
     do
-        if docker exec "${CONTAINER_NAME}" \
-            curl -fs "http://localhost:${PORT}/actuator/health" > /dev/null
+        if docker exec "${CONTAINER_NAME}" curl -fs "http://localhost:${PORT}/actuator/health" > /dev/null
         then
             SUCCESS=true
             echo "${SERVICE_NAME} Health Check Success"
@@ -107,9 +98,7 @@ check_health() {
     if [ "${SUCCESS}" = false ]; then
         echo "${SERVICE_NAME} Health Check Failed"
 
-        docker compose \
-            -f "${COMPOSE_FILE}" \
-            logs --tail=100 "${SERVICE_NAME}"
+        docker compose -f "${COMPOSE_FILE}" logs --tail=100 "${SERVICE_NAME}"
 
         exit 1
     fi
@@ -117,36 +106,15 @@ check_health() {
 
 echo "Health Check"
 
-check_health \
-    "eureka-server-${TARGET}" \
-    "rp-gym-eureka-${TARGET}" \
-    19000
+check_health "eureka-server-${TARGET}" "rp-gym-eureka-${TARGET}" 19000
+check_health "gateway-${TARGET}" "rp-gym-gateway-${TARGET}" 19001
+check_health "user-service-${TARGET}" "rp-gym-user-${TARGET}" 19010
+check_health "health-service-${TARGET}" "rp-gym-health-${TARGET}" 19011
+check_health "game-service-${TARGET}" "rp-gym-game-${TARGET}" 19012
 
-check_health \
-    "gateway-${TARGET}" \
-    "rp-gym-gateway-${TARGET}" \
-    19001
+echo "Start Nginx"
 
-# TODO
-# User Service Health Check
-# check_health \
-#     "user-service-${TARGET}" \
-#     "rp-gym-user-${TARGET}" \
-#     19010
-
-# TODO
-# Health Service Health Check
-# check_health \
-#     "health-service-${TARGET}" \
-#     "rp-gym-health-${TARGET}" \
-#     19011
-
-# TODO
-# Game Service Health Check
-# check_health \
-#     "game-service-${TARGET}" \
-#     "rp-gym-game-${TARGET}" \
-#     19012
+docker compose -f "${COMPOSE_FILE}" up -d nginx
 
 echo "Switch Nginx"
 
@@ -196,9 +164,7 @@ echo "Nginx switched to gateway-${TARGET}"
 
 echo "Stop ${BEFORE} Environment"
 
-docker compose \
-    -f "${COMPOSE_FILE}" \
-    stop "${BEFORE_SERVICES[@]}"
+docker compose -f "${COMPOSE_FILE}" stop "${BEFORE_SERVICES[@]}"
 
 echo "Deploy Success"
 echo "Active Environment : ${TARGET}"
