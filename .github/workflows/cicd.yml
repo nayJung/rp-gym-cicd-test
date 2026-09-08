@@ -233,6 +233,10 @@ jobs:
 
     steps:
 
+      # 소스 코드 가져오기
+      - name: Checkout source
+        uses: actions/checkout@v4
+
       # JAR Artifact 다운로드
       - name: Download Application JARs
         uses: actions/download-artifact@v4
