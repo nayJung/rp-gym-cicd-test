@@ -48,6 +48,19 @@ BEFORE_SERVICES=(
     "game-service-${BEFORE}"
 )
 
+echo "Start Shared Infrastructure"
+
+docker compose -f "${COMPOSE_FILE}" up -d \
+    postgres-user \
+    postgres-health \
+    postgres-game \
+    kafka \
+    redis \
+    prometheus \
+    grafana \
+    loki \
+    alloy
+
 echo "Build & Start ${TARGET}"
 
 docker compose -f "${COMPOSE_FILE}" up -d --build "${TARGET_SERVICES[@]}"
