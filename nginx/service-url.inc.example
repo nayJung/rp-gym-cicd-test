@@ -1,0 +1,3 @@
+upstream gateway {
+    server gateway-blue:19001;
+}

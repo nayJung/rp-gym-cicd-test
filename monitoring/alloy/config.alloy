@@ -1,0 +1,32 @@
+// Docker 컨테이너 자동 발견
+discovery.docker "linux" {
+  host = "unix:///var/run/docker.sock"
+}
+
+// Docker 컨테이너 이름을 service_name 라벨로 설정
+discovery.relabel "docker_containers" {
+  targets = discovery.docker.linux.targets
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "service_name"
+  }
+}
+
+// Docker 컨테이너 로그 수집
+loki.source.docker "containers" {
+  host         = "unix:///var/run/docker.sock"
+  targets      = discovery.relabel.docker_containers.output
+  labels       = {
+    platform = "docker",
+  }
+  forward_to   = [loki.write.local.receiver]
+}
+
+// Loki로 전송
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}

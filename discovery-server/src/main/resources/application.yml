@@ -8,7 +8,7 @@ spring:
 eureka:
   # Eureka 인스턴스의 호스트 이름
   instance:
-    hostname: localhost
+    hostname: ${EUREKA_HOST:localhost}
 
   client:
     # Eureka Server 자신을 다른 Eureka Server에 클라이언트로 등록하지 않음
@@ -27,4 +27,4 @@ management:
       exposure:
         # HTTP로 외부에 노출할 Actuator Endpoint
         # health: 애플리케이션의 현재 상태 확인
-        include: health
+        include: health, info, prometheus

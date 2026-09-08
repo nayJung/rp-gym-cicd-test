@@ -93,8 +93,8 @@ rpgym:
 
 eureka:
   instance:
-    # Eureka Server에 주소를 등록할 때 hostname 대신 IP를 선호
-    prefer-ip-address: true
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
+    prefer-ip-address: ${EUREKA_PREFER_IP_ADDRESS:true}
 
   client:
     # Eureka Server에 Health Service 등록
@@ -105,7 +105,7 @@ eureka:
 
     service-url:
       # Eureka Server 주소
-      defaultZone: http://localhost:19000/eureka/
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:19000/eureka/}
 
 management:
   endpoints:
@@ -113,4 +113,4 @@ management:
       exposure:
         # HTTP로 노출할 Actuator Endpoint
         # health: 애플리케이션 상태 확인, info: 애플리케이션 정보 확인
-        include: health, info
+        include: health, info, prometheus

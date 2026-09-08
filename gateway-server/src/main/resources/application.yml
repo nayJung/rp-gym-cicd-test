@@ -46,7 +46,7 @@ management:
     web:
       exposure:
         # Gateway 상태 확인을 위한 Actuator Health Endpoint
-        include: health
+        include: health, info, prometheus
 
 jwt:
   secret: ${JWT_SECRET}

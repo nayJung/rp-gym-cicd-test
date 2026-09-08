@@ -56,6 +56,8 @@ dependencies {
     testCompileOnly 'org.projectlombok:lombok'
     testAnnotationProcessor 'org.projectlombok:lombok'
 
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+
     // 컨슈머 kill / 중복 주입 / 순서 역전 정합성 배치 검증용.
     testImplementation 'org.springframework.kafka:spring-kafka-test'
     testImplementation 'org.testcontainers:junit-jupiter'

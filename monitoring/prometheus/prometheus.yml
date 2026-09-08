@@ -1,0 +1,64 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+
+  - job_name: eureka-blue
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - eureka-server-blue:19000
+
+  - job_name: eureka-green
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - eureka-server-green:19000
+
+  - job_name: gateway-blue
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - gateway-blue:19001
+
+  - job_name: gateway-green
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - gateway-green:19001
+
+  - job_name: user-blue
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - user-service-blue:19010
+
+  - job_name: user-green
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - user-service-green:19010
+
+  - job_name: health-blue
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - health-service-blue:19011
+
+  - job_name: health-green
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - health-service-green:19011
+
+  - job_name: game-blue
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - game-service-blue:19012
+
+  - job_name: game-green
+    metrics_path: /actuator/prometheus
+    static_configs:
+      - targets:
+          - game-service-green:19012

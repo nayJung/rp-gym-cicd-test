@@ -9,6 +9,7 @@ dependencies {
 
     // Health Check 및 Actuator Endpoint
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
 }

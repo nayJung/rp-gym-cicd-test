@@ -1,5 +1,6 @@
 .gradle/
 **/build/
+*.jar
 
 .idea/
 *.iml
@@ -13,3 +14,5 @@
 
 .DS_Store
 Thumbs.db
+
+nginx/service-url.inc
