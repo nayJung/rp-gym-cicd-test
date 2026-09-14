@@ -12,6 +12,11 @@ spring:
     gateway:
       server:
         webflux:
+          # Timeout 적용
+          httpclient:
+            connect-timeout: 3000
+            response-timeout: 5s
+
           routes:
             - id: user-service
               uri: lb://user-service
