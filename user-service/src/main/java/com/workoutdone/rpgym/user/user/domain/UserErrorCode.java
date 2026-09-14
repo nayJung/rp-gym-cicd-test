@@ -34,6 +34,15 @@ public enum UserErrorCode implements ErrorCode {
             "정지된 계정입니다."
     ),
 
+    // 존재하지 않음/만료/이미 폐기(로그아웃·재발급)됨
+    // 발급 이후 탈퇴됨을 모두 이 코드 하나로 응답
+    // (탈퇴 여부를 노출하지 않는 원칙은 LOGIN_FAILED와 동일)
+    INVALID_REFRESH_TOKEN(
+            "INVALID_REFRESH_TOKEN",
+            HttpStatus.UNAUTHORIZED,
+            "리프레시 토큰이 유효하지 않습니다. 다시 로그인해주세요."
+    ),
+
     USER_NOT_FOUND(
             "USER_NOT_FOUND",
             HttpStatus.NOT_FOUND,

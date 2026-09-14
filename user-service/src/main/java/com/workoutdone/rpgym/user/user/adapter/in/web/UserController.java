@@ -4,6 +4,7 @@ import com.workoutdone.rpgym.common.constant.HeaderConstants;
 import com.workoutdone.rpgym.common.security.RequireRole;
 import com.workoutdone.rpgym.common.security.UserRole;
 import com.workoutdone.rpgym.user.user.adapter.in.web.dto.ReqLoginDto;
+import com.workoutdone.rpgym.user.user.adapter.in.web.dto.ReqRefreshTokenDto;
 import com.workoutdone.rpgym.user.user.adapter.in.web.dto.ReqSignUpDto;
 import com.workoutdone.rpgym.user.user.adapter.in.web.dto.ReqUpdateMyAccountDto;
 import com.workoutdone.rpgym.user.user.adapter.in.web.dto.ResLoginDto;
@@ -14,6 +15,8 @@ import com.workoutdone.rpgym.user.user.application.GetMyAccountResult;
 import com.workoutdone.rpgym.user.user.application.GetMyAccountService;
 import com.workoutdone.rpgym.user.user.application.LoginResult;
 import com.workoutdone.rpgym.user.user.application.LoginService;
+import com.workoutdone.rpgym.user.user.application.RefreshTokenResult;
+import com.workoutdone.rpgym.user.user.application.RefreshTokenService;
 import com.workoutdone.rpgym.user.user.application.SignUpResult;
 import com.workoutdone.rpgym.user.user.application.SignUpService;
 import com.workoutdone.rpgym.user.user.application.UpdateMyAccountResult;
@@ -39,6 +42,7 @@ public class UserController {
 
     private final SignUpService signUpService;
     private final LoginService loginService;
+    private final RefreshTokenService refreshTokenService;
     private final GetMyAccountService getMyAccountService;
     private final UpdateMyAccountService updateMyAccountService;
 
@@ -54,6 +58,17 @@ public class UserController {
     @PostMapping("/login")
     public ResponseEntity<ResLoginDto> login(@Valid @RequestBody ReqLoginDto request) {
         LoginResult result = loginService.login(request.toCommand());
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(ResLoginDto.from(result));
+    }
+
+    // 게이트웨이 표준 인증(JWT)을 거치지 않는 API
+    // 요청 바디의 refreshToken 자체를 자격증명으로 삼아 RefreshTokenService가 직접 검증하므로 X-User-Id/@RequireRole을 쓰지 않음
+    @PostMapping("/refresh")
+    public ResponseEntity<ResLoginDto> refresh(@Valid @RequestBody ReqRefreshTokenDto request) {
+        RefreshTokenResult result = refreshTokenService.refresh(request.toCommand());
 
         return ResponseEntity
                 .status(HttpStatus.OK)
