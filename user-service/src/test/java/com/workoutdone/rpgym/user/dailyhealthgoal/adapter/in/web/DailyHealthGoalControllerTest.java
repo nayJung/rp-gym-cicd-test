@@ -3,6 +3,8 @@ package com.workoutdone.rpgym.user.dailyhealthgoal.adapter.in.web;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.workoutdone.rpgym.common.exception.BaseException;
 import com.workoutdone.rpgym.user.dailyhealthgoal.adapter.in.web.dto.ReqRegisterDailyHealthGoalDto;
+import com.workoutdone.rpgym.user.dailyhealthgoal.application.GetDailyHealthGoalResult;
+import com.workoutdone.rpgym.user.dailyhealthgoal.application.GetDailyHealthGoalService;
 import com.workoutdone.rpgym.user.dailyhealthgoal.application.RegisterDailyHealthGoalCommand;
 import com.workoutdone.rpgym.user.dailyhealthgoal.application.RegisterDailyHealthGoalResult;
 import com.workoutdone.rpgym.user.dailyhealthgoal.application.RegisterDailyHealthGoalService;
@@ -23,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -40,6 +43,9 @@ class DailyHealthGoalControllerTest {
 
     @MockitoBean
     private RegisterDailyHealthGoalService registerDailyHealthGoalService;
+
+    @MockitoBean
+    private GetDailyHealthGoalService getDailyHealthGoalService;
 
     private ReqRegisterDailyHealthGoalDto validRequest() {
         return ReqRegisterDailyHealthGoalDto.builder()
@@ -208,5 +214,77 @@ class DailyHealthGoalControllerTest {
                         .content(objectMapper.writeValueAsString(validRequest())))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DAILY_GOAL_ALREADY_EXISTS"));
+    }
+
+    @Test
+    @DisplayName("USER role이고 등록된 목표가 있으면 200과 함께 일일 목표 정보를 반환한다")
+    void getDailyHealthGoal_success() throws Exception {
+        GetDailyHealthGoalResult result = GetDailyHealthGoalResult.builder()
+                .id(UUID.randomUUID())
+                .stepGoal(5000)
+                .activeMinutesGoal(60)
+                .activeCaloriesGoal(500)
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
+        given(getDailyHealthGoalService.getDailyHealthGoal(any())).willReturn(result);
+
+        mockMvc.perform(get(REGISTER_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.stepGoal").value(5000))
+                .andExpect(jsonPath("$.activeMinutesGoal").value(60))
+                .andExpect(jsonPath("$.activeCaloriesGoal").value(500));
+    }
+
+    @Test
+    @DisplayName("등록된 일일 목표가 없으면 404 DAILY_GOAL_NOT_FOUND를 반환한다")
+    void getDailyHealthGoal_notFound() throws Exception {
+        given(getDailyHealthGoalService.getDailyHealthGoal(any()))
+                .willThrow(new BaseException(DailyHealthGoalErrorCode.DAILY_GOAL_NOT_FOUND));
+
+        mockMvc.perform(get(REGISTER_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("DAILY_GOAL_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("조회 시 X-User-Role이 ADMIN이면 403 FORBIDDEN을 반환한다")
+    void getDailyHealthGoal_adminForbidden() throws Exception {
+        mockMvc.perform(get(REGISTER_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "ADMIN"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("조회 시 X-User-Role이 USER가 아니면 403 FORBIDDEN을 반환한다")
+    void getDailyHealthGoal_disallowedRole() throws Exception {
+        mockMvc.perform(get(REGISTER_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "GUEST"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("조회 시 X-User-Id/X-User-Role 헤더가 둘 다 없으면 401 UNAUTHORIZED를 반환한다")
+    void getDailyHealthGoal_noHeaders() throws Exception {
+        mockMvc.perform(get(REGISTER_URL))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("조회 시 X-User-Role 헤더만 없으면 401 UNAUTHORIZED를 반환한다")
+    void getDailyHealthGoal_missingRoleHeader() throws Exception {
+        mockMvc.perform(get(REGISTER_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
     }
 }
