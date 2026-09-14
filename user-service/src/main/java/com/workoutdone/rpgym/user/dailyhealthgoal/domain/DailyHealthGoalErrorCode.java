@@ -13,6 +13,12 @@ public enum DailyHealthGoalErrorCode implements ErrorCode {
             "DAILY_GOAL_ALREADY_EXISTS",
             HttpStatus.CONFLICT,
             "이미 등록된 일일 목표가 있습니다."
+    ),
+
+    DAILY_GOAL_NOT_FOUND(
+            "DAILY_GOAL_NOT_FOUND",
+            HttpStatus.NOT_FOUND,
+            "등록된 일일 목표가 없습니다."
     );
 
     private final String code;
