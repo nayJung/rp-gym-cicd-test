@@ -1,8 +1,6 @@
 package com.workoutdone.rpgym.user.dailyhealthgoal.adapter.in.web;
 
 import com.workoutdone.rpgym.common.constant.HeaderConstants;
-import com.workoutdone.rpgym.common.exception.BaseException;
-import com.workoutdone.rpgym.common.exception.CommonErrorCode;
 import com.workoutdone.rpgym.common.security.RequireRole;
 import com.workoutdone.rpgym.common.security.UserRole;
 import com.workoutdone.rpgym.user.dailyhealthgoal.adapter.in.web.dto.ReqRegisterDailyHealthGoalDto;
@@ -33,28 +31,13 @@ public class DailyHealthGoalController {
     @RequireRole(UserRole.USER)
     @PostMapping("/me")
     public ResponseEntity<ResDailyHealthGoalDto> registerDailyHealthGoal(
-            @RequestHeader(value = HeaderConstants.USER_ID, required = false) String userIdHeader,
+            @RequestHeader(HeaderConstants.USER_ID) UUID userId,
             @Valid @RequestBody ReqRegisterDailyHealthGoalDto request
     ) {
-        UUID userId = resolveUserId(userIdHeader);
         RegisterDailyHealthGoalResult result = registerDailyHealthGoalService.registerDailyHealthGoal(request.toCommand(userId));
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
                 .body(ResDailyHealthGoalDto.from(result));
-    }
-
-    ////TO-DO: 게이트웨이에서 JWT 유효성 및 요청헤더 유효성 검증 로직 추가되면 해당 메서드는 삭제 예정
-    // 게이트웨이를 거치지 않아 X-User-Id가 없거나 UUID 형식이 아니면 인증 안 된 요청으로 취급
-    private UUID resolveUserId(String userIdHeader) {
-        if (userIdHeader == null || userIdHeader.isBlank()) {
-            throw new BaseException(CommonErrorCode.UNAUTHORIZED);
-        }
-
-        try {
-            return UUID.fromString(userIdHeader);
-        } catch (IllegalArgumentException e) {
-            throw new BaseException(CommonErrorCode.UNAUTHORIZED);
-        }
     }
 }

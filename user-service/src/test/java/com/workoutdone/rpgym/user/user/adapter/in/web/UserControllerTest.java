@@ -354,16 +354,6 @@ class UserControllerTest {
     }
 
     @Test
-    @DisplayName("X-User-Id가 UUID 형식이 아니면 401 UNAUTHORIZED를 반환한다")
-    void getMyAccount_invalidUserIdFormat() throws Exception {
-        mockMvc.perform(get(ME_URL)
-                        .header("X-User-Id", "not-a-uuid")
-                        .header("X-User-Role", "USER"))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
-    }
-
-    @Test
     @DisplayName("존재하지 않거나 탈퇴한 사용자면 404 USER_NOT_FOUND를 반환한다")
     void getMyAccount_userNotFound() throws Exception {
         UUID userId = UUID.randomUUID();

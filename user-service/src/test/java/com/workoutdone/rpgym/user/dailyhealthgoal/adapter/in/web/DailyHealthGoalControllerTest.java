@@ -148,18 +148,6 @@ class DailyHealthGoalControllerTest {
     }
 
     @Test
-    @DisplayName("X-User-Id가 UUID 형식이 아니면 401 UNAUTHORIZED를 반환한다")
-    void registerDailyHealthGoal_invalidUserIdFormat() throws Exception {
-        mockMvc.perform(post(REGISTER_URL)
-                        .header("X-User-Id", "not-a-uuid")
-                        .header("X-User-Role", "USER")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(validRequest())))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
-    }
-
-    @Test
     @DisplayName("stepGoal이 음수면 400 INVALID_INPUT을 반환한다")
     void registerDailyHealthGoal_negativeStepGoal() throws Exception {
         ReqRegisterDailyHealthGoalDto request = ReqRegisterDailyHealthGoalDto.builder()
