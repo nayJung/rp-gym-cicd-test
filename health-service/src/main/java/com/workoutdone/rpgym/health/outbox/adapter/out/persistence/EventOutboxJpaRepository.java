@@ -30,6 +30,8 @@ public interface EventOutboxJpaRepository extends JpaRepository<EventOutbox, UUI
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @QueryHints(@QueryHint(name = "jakarta.persistence.lock.timeout", value = "-2"))
-    @Query("select o from EventOutbox o where o.status = :status order by o.createdAt asc")
+    // seq가 삽입 순서를 그대로 반영하므로 단독 정렬 키로 충분하다.
+    // created_at은 같은 트랜잭션에서 동점이 되므로 정렬에 쓰지 않는다.
+    @Query("select o from EventOutbox o where o.status = :status order by o.seq asc")
     List<EventOutbox> findByStatusForUpdate(@Param("status") OutboxStatus status, Pageable pageable);
 }
