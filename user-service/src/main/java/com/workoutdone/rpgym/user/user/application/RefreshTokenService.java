@@ -39,12 +39,12 @@ public class RefreshTokenService {
             throw new BaseException(UserErrorCode.ACCOUNT_SUSPENDED);
         }
 
-        // 토큰 회전(Refresh Token Rotation): 기존 refreshToken은 폐기하고 새로 발급
-        refreshTokenStore.delete(command.getRefreshToken());
-
         String accessToken = jwtProvider.createAccessToken(user.getId(), user.getRole());
+
+        // 토큰 회전(Refresh Token Rotation): 기존 refreshToken 폐기와 새 refreshToken 저장을
+        // 원자적으로 실행한다 (delete/save를 따로 호출하지 않음)
         String newRefreshToken = UUID.randomUUID().toString();
-        refreshTokenStore.save(newRefreshToken, user.getId());
+        refreshTokenStore.rotate(command.getRefreshToken(), newRefreshToken, user.getId());
 
         return RefreshTokenResult.builder()
                 .accessToken(accessToken)
