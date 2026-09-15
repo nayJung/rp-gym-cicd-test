@@ -43,8 +43,13 @@ public class RefreshTokenService {
 
         // 토큰 회전(Refresh Token Rotation): 기존 refreshToken 폐기와 새 refreshToken 저장을
         // 원자적으로 실행한다 (delete/save를 따로 호출하지 않음)
+        // 동시에 같은 refreshToken으로 재발급이 요청돼 이미 다른 요청이 먼저 회전시켰다면
+        // rotate()가 false를 반환하므로, 이 요청은 만료된 토큰과 동일하게 취급한다
         String newRefreshToken = UUID.randomUUID().toString();
-        refreshTokenStore.rotate(command.getRefreshToken(), newRefreshToken, user.getId());
+        boolean rotated = refreshTokenStore.rotate(command.getRefreshToken(), newRefreshToken, user.getId());
+        if (!rotated) {
+            throw new BaseException(UserErrorCode.INVALID_REFRESH_TOKEN);
+        }
 
         return RefreshTokenResult.builder()
                 .accessToken(accessToken)
