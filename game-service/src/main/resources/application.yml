@@ -142,3 +142,19 @@ rpgym:
     # XP 원본 선택. mock = 해시 기반 가짜값, wallet = XpQueryService 경유 실제 wallets.
     # wallets 와 XpQueryService 가 develop 에 들어와서 wallet 으로 전환한다.
     source: wallet
+
+  party:
+    max-member: 4
+    # 모집 시간. SA 정리본 기준 24h. 자동 매칭을 바꾸려면 이 값만 바꾼다
+    recruit-duration: 24h
+    # 파티 수명. 퀘스트 담당이 파티 퀘스트 기한으로 읽는 ends_at 의 근거
+    lifetime: 7d
+    # 초대 만료. recruit-duration 이하
+    invitation-ttl: 24h
+    # 자동 매칭 후보 수. 경쟁에서 밀리면 재조회 없이 다음 후보로 넘어간다
+    matching-candidates: 10
+    batch:
+      # 모집 마감 전이 주기(ms). lazy 판정이 정확성을 보장하니 이건 정리용이다
+      close-interval: 10000
+      # 파티 종료 · 초대 만료 정리 주기(ms)
+      end-interval: 60000
