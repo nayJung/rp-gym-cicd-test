@@ -30,4 +30,9 @@ public class DailyHealthSummaryRepositoryImpl implements DailyHealthSummaryRepos
     public List<DailyHealthSummary> findByUserIdAndActivityDateBetween(UUID userId, LocalDate from, LocalDate to) {
         return jpaRepository.findByUserIdAndActivityDateBetween(userId, from, to);
     }
+
+    @Override
+    public List<DailyHealthSummary> findUnresolvedBefore(LocalDate date) {
+        return jpaRepository.findByActivityDateBeforeAndAchievedAtIsNullAndFailedAtIsNull(date);
+    }
 }
