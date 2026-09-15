@@ -22,6 +22,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -64,6 +65,7 @@ class RefreshTokenServiceTest {
         given(userRepository.findByIdAndDeletedAtIsNull(userId)).willReturn(Optional.of(user));
         given(jwtProvider.createAccessToken(userId, user.getRole())).willReturn("new-access-token");
         given(jwtProvider.getAccessTokenExpirySeconds()).willReturn(1800L);
+        given(refreshTokenStore.rotate(eq(OLD_REFRESH_TOKEN), anyString(), eq(userId))).willReturn(true);
 
         RefreshTokenResult result = refreshTokenService.refresh(command());
 
@@ -104,6 +106,22 @@ class RefreshTokenServiceTest {
 
         verify(jwtProvider, never()).createAccessToken(any(), any());
         verify(refreshTokenStore, never()).rotate(anyString(), anyString(), any());
+    }
+
+    @Test
+    @DisplayName("동시 요청으로 이미 다른 요청이 먼저 회전시켰다면(rotate 실패) INVALID_REFRESH_TOKEN 예외를 던진다")
+    void refresh_concurrentRotationLost_throwsInvalidRefreshToken() {
+        UUID userId = UUID.randomUUID();
+        User user = activeUser(userId);
+        given(refreshTokenStore.findUserId(OLD_REFRESH_TOKEN)).willReturn(Optional.of(userId));
+        given(userRepository.findByIdAndDeletedAtIsNull(userId)).willReturn(Optional.of(user));
+        given(jwtProvider.createAccessToken(userId, user.getRole())).willReturn("new-access-token");
+        // 이 요청이 findUserId를 통과한 뒤, rotate 시점엔 이미 다른 동시 요청이 같은 토큰을 회전시킨 상황을 흉내낸다.
+        given(refreshTokenStore.rotate(eq(OLD_REFRESH_TOKEN), anyString(), eq(userId))).willReturn(false);
+
+        assertThatThrownBy(() -> refreshTokenService.refresh(command()))
+                .isInstanceOf(BaseException.class)
+                .satisfies(ex -> assertThat(((BaseException) ex).getErrorCode()).isEqualTo(UserErrorCode.INVALID_REFRESH_TOKEN));
     }
 
     @Test
