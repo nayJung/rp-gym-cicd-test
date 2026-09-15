@@ -30,5 +30,12 @@ public class LogoutService {
         }
 
         refreshTokenStore.delete(command.getRefreshToken());
+
+        ////TO-DO: accessToken은 무상태(stateless) JWT라 여기서 폐기해도 만료 전까지는 계속 유효하다.
+        ////       즉시 무효화가 필요해지면 accessToken을 Redis 블랙리스트로 관리하는 기능을 추가한다.
+        ////       이땐 JwtProvider가 accessToken 발급 시 jti 클레임을 추가로 넣어야 하고,
+        ////       게이트웨이가 그 jti를 X-Token-Jti 같은 헤더로 여기까지 전달해줘야 하며,
+        ////       게이트웨이 쪽 JWT 검증 로직도 매 요청마다 그 블랙리스트를 조회하도록 바뀌어야 한다.
+        ////       그 전까지는 accessToken의 짧은 만료 시간(expiresIn)에만 의존한다.
     }
 }
