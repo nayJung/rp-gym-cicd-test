@@ -73,8 +73,7 @@ class RefreshTokenServiceTest {
         assertThat(result.getRefreshToken()).isNotBlank();
         assertThat(result.getRefreshToken()).isNotEqualTo(OLD_REFRESH_TOKEN);
 
-        verify(refreshTokenStore).delete(OLD_REFRESH_TOKEN);
-        verify(refreshTokenStore).save(result.getRefreshToken(), userId);
+        verify(refreshTokenStore).rotate(OLD_REFRESH_TOKEN, result.getRefreshToken(), userId);
     }
 
     @Test
@@ -87,7 +86,7 @@ class RefreshTokenServiceTest {
                 .satisfies(ex -> assertThat(((BaseException) ex).getErrorCode()).isEqualTo(UserErrorCode.INVALID_REFRESH_TOKEN));
 
         verify(jwtProvider, never()).createAccessToken(any(), any());
-        verify(refreshTokenStore, never()).delete(anyString());
+        verify(refreshTokenStore, never()).rotate(anyString(), anyString(), any());
     }
 
     @Test
@@ -104,7 +103,7 @@ class RefreshTokenServiceTest {
                 .satisfies(ex -> assertThat(((BaseException) ex).getErrorCode()).isEqualTo(UserErrorCode.INVALID_REFRESH_TOKEN));
 
         verify(jwtProvider, never()).createAccessToken(any(), any());
-        verify(refreshTokenStore, never()).delete(anyString());
+        verify(refreshTokenStore, never()).rotate(anyString(), anyString(), any());
     }
 
     @Test
@@ -121,6 +120,6 @@ class RefreshTokenServiceTest {
                 .satisfies(ex -> assertThat(((BaseException) ex).getErrorCode()).isEqualTo(UserErrorCode.ACCOUNT_SUSPENDED));
 
         verify(jwtProvider, never()).createAccessToken(any(), any());
-        verify(refreshTokenStore, never()).delete(anyString());
+        verify(refreshTokenStore, never()).rotate(anyString(), anyString(), any());
     }
 }
