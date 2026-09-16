@@ -9,6 +9,7 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -46,6 +47,11 @@ public class User extends BaseCreatedUpdatedDeletedEntity {
 
     @Column(name = "slack_id", nullable = false, length = 100)
     private String slackId;
+
+    // 낙관적 락
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     private User(String email, String password, String nickname, String slackId) {
         this.email = email;
