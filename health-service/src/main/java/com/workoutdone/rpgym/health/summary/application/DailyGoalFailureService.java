@@ -19,14 +19,15 @@ public class DailyGoalFailureService {
 
 
     private static final int LOOKBACK_DAYS = 30;
-    private static final int BATCH_LIMIT = 500;
+    public static final int BATCH_LIMIT = 500;
 
     private final DailyHealthSummaryRepository summaryRepository;
 
     @Transactional(readOnly = true)
     public List<DailyHealthSummary> findUnresolved(LocalDate today) {
+        LocalDate yesterday = today.minusDays(1);
         LocalDate from = today.minusDays(LOOKBACK_DAYS);
-        return summaryRepository.findUnresolvedBetween(from, today, BATCH_LIMIT);
+        return summaryRepository.findUnresolvedBetween(from, yesterday, BATCH_LIMIT);
     }
 
     @Transactional

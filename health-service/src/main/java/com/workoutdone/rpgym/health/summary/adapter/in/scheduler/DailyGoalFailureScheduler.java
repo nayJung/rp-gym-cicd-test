@@ -27,6 +27,11 @@ public class DailyGoalFailureScheduler {
             Instant now = Instant.now();
             List<DailyHealthSummary> unresolved = dailyGoalFailureService.findUnresolved(today);
 
+            if (unresolved.size() == DailyGoalFailureService.BATCH_LIMIT) {
+                log.warn("일일 목표 실패 처리 대상이 배치 상한({})에 도달했다. 다음날로 밀릴 수 있다.",
+                        DailyGoalFailureService.BATCH_LIMIT);
+            }
+
             int failedCount = 0;
             for (DailyHealthSummary summary : unresolved) {
                 try {

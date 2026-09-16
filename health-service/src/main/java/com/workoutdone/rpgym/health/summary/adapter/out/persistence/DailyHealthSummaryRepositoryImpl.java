@@ -4,6 +4,7 @@ import com.workoutdone.rpgym.health.summary.domain.DailyHealthSummary;
 import com.workoutdone.rpgym.health.summary.domain.DailyHealthSummaryRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
+import org.springframework.data.domain.PageRequest;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -34,7 +35,7 @@ public class DailyHealthSummaryRepositoryImpl implements DailyHealthSummaryRepos
     @Override
     public List<DailyHealthSummary> findUnresolvedBetween(LocalDate from, LocalDate to, int limit) {
         return jpaRepository.findByActivityDateBetweenAndAchievedAtIsNullAndFailedAtIsNull(
-                from, to, org.springframework.data.domain.PageRequest.of(0, limit));
+                from, to, PageRequest.of(0, limit));
     }
 
     @Override
