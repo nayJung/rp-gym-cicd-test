@@ -56,6 +56,13 @@ public enum CommonErrorCode implements ErrorCode {
             "리소스를 찾을 수 없습니다."
     ),
 
+    // 낙관적 락(@Version) 충돌
+    CONFLICT(
+            "CONFLICT",
+            HttpStatus.CONFLICT,
+            "다른 요청에 의해 데이터가 변경되었습니다. 다시 시도해주세요."
+    ),
+
     SERVICE_UNAVAILABLE(
             "SERVICE_UNAVAILABLE",
             HttpStatus.SERVICE_UNAVAILABLE,
