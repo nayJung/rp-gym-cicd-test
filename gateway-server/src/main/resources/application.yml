@@ -37,6 +37,11 @@ spring:
               predicates:
                 - Path=/api/v1/games/**
 
+            - id: notification-service
+              uri: lb://notification-service
+              predicates:
+                - Path=/api/v1/notifications/**
+
 eureka:
   client:
     # Eureka Server에 Gateway 자신을 등록
@@ -60,9 +65,10 @@ management:
     sampling:
       # 모든 요청을 trace 대상으로 잡음
       probability: 1.0
-    export:
-      zipkin:
-        endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
+
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
 
 jwt:
   secret: ${JWT_SECRET}
