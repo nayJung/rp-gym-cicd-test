@@ -21,10 +21,12 @@ import com.workoutdone.rpgym.user.user.application.SignUpResult;
 import com.workoutdone.rpgym.user.user.application.SignUpService;
 import com.workoutdone.rpgym.user.user.application.UpdateMyAccountResult;
 import com.workoutdone.rpgym.user.user.application.UpdateMyAccountService;
+import com.workoutdone.rpgym.user.user.application.WithdrawService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -45,6 +47,7 @@ public class UserController {
     private final RefreshTokenService refreshTokenService;
     private final GetMyAccountService getMyAccountService;
     private final UpdateMyAccountService updateMyAccountService;
+    private final WithdrawService withdrawService;
 
     @PostMapping("/signup")
     public ResponseEntity<ResSignUpDto> signUp(@Valid @RequestBody ReqSignUpDto request) {
@@ -102,5 +105,18 @@ public class UserController {
         return ResponseEntity
                 .status(HttpStatus.OK)
                 .body(ResUpdateMyAccountDto.from(result));
+    }
+
+    // USER role만 본인 계정 탈퇴 가능 (ADMIN 제외)
+    // X-User-Role 검증은 RoleAuthorizationInterceptor가 처리
+    // 이미 탈퇴한 계정에 다시 호출해도 에러 없이 204로 응답한다(멱등 처리)
+    @RequireRole(UserRole.USER)
+    @DeleteMapping("/me")
+    public ResponseEntity<Void> withdrawMyAccount(
+            @RequestHeader(HeaderConstants.USER_ID) UUID userId
+    ) {
+        withdrawService.withdraw(userId);
+
+        return ResponseEntity.noContent().build();
     }
 }

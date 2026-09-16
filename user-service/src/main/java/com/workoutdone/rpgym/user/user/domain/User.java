@@ -85,4 +85,10 @@ public class User extends BaseCreatedUpdatedDeletedEntity {
     public UserStatus getDisplayStatus() {
         return getDeletedAt() != null ? UserStatus.WITHDRAWN : status;
     }
+
+    // 회원 탈퇴 시, Soft Delete(deletedAt)와 status 컬럼을 함께 갱신
+    public void withdraw() {
+        delete();
+        this.status = UserStatus.WITHDRAWN;
+    }
 }
