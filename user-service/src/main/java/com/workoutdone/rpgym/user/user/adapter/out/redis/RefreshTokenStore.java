@@ -53,11 +53,16 @@ public class RefreshTokenStore {
         redisTemplate.opsForValue().set(KEY_PREFIX + refreshToken, userId.toString(), TTL);
     }
 
-    // 재발급 시 refreshToken으로 발급 대상 userId를 조회한다.
-    // 만료/로그아웃-재발급으로 인한 폐기/애초에 존재한 적 없음을 여기서 구분하지 않는다 (모두 빈 값)
+    // 재발급/로그아웃 시 refreshToken으로 소유자 userId를 조회한다.
+    // 만료/이미 폐기됨/존재한 적 없음을 여기서 구분하지 않는다 (모두 빈 값)
     public Optional<UUID> findUserId(String refreshToken) {
         String userId = redisTemplate.opsForValue().get(KEY_PREFIX + refreshToken);
         return Optional.ofNullable(userId).map(UUID::fromString);
+    }
+
+    // 로그아웃 시 해당 refreshToken 하나만 폐기하기 위해 사용
+    public void delete(String refreshToken) {
+        redisTemplate.delete(KEY_PREFIX + refreshToken);
     }
 
     // 토큰 회전(Refresh Token Rotation): 기존 refreshToken 존재 확인, 폐기, 새 refreshToken 저장을

@@ -2,6 +2,7 @@ package com.workoutdone.rpgym.user.user.adapter.in.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.workoutdone.rpgym.common.exception.BaseException;
+import com.workoutdone.rpgym.common.exception.CommonErrorCode;
 import com.workoutdone.rpgym.common.security.UserRole;
 import com.workoutdone.rpgym.user.user.adapter.in.web.dto.ReqLoginDto;
 import com.workoutdone.rpgym.user.user.adapter.in.web.dto.ReqRefreshTokenDto;
@@ -10,6 +11,7 @@ import com.workoutdone.rpgym.user.user.application.GetMyAccountResult;
 import com.workoutdone.rpgym.user.user.application.GetMyAccountService;
 import com.workoutdone.rpgym.user.user.application.LoginResult;
 import com.workoutdone.rpgym.user.user.application.LoginService;
+import com.workoutdone.rpgym.user.user.application.LogoutService;
 import com.workoutdone.rpgym.user.user.application.RefreshTokenResult;
 import com.workoutdone.rpgym.user.user.application.RefreshTokenService;
 import com.workoutdone.rpgym.user.user.application.SignUpCommand;
@@ -33,6 +35,7 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -44,6 +47,7 @@ class UserControllerTest {
 
     private static final String SIGNUP_URL = "/api/v1/users/signup";
     private static final String LOGIN_URL = "/api/v1/users/login";
+    private static final String LOGOUT_URL = "/api/v1/users/logout";
     private static final String ME_URL = "/api/v1/users/me";
 
     @Autowired
@@ -57,6 +61,9 @@ class UserControllerTest {
 
     @MockitoBean
     private LoginService loginService;
+
+    @MockitoBean
+    private LogoutService logoutService;
 
     @MockitoBean
     private RefreshTokenService refreshTokenService;
@@ -391,6 +398,122 @@ class UserControllerTest {
                         .content(rawJson))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("ACCOUNT_SUSPENDED"));
+    }
+
+    private String validLogoutRequestJson() {
+        return """
+                {
+                  "refreshToken": "8f3c1e2a-7b4d-4c9e-9a11-3f6d9c0b7e33"
+                }
+                """;
+    }
+
+    @Test
+    @DisplayName("USER role이고 본인 소유 refreshToken이면 204를 반환한다")
+    void logout_successAsUser() throws Exception {
+        mockMvc.perform(post(LOGOUT_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validLogoutRequestJson()))
+                .andExpect(status().isNoContent());
+
+        verify(logoutService).logout(any());
+    }
+
+    @Test
+    @DisplayName("ADMIN role이어도 204를 반환한다 (USER/ADMIN 둘 다 허용)")
+    void logout_successAsAdmin() throws Exception {
+        mockMvc.perform(post(LOGOUT_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "ADMIN")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validLogoutRequestJson()))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    @DisplayName("refreshToken이 없으면 400 INVALID_INPUT을 반환한다")
+    void logout_missingToken() throws Exception {
+        String rawJson = """
+                {
+                  "refreshToken": ""
+                }
+                """;
+
+        mockMvc.perform(post(LOGOUT_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(rawJson))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+    }
+
+    @Test
+    @DisplayName("refreshToken이 UUID 형식이 아니면 400 INVALID_INPUT을 반환한다")
+    void logout_invalidFormat() throws Exception {
+        String rawJson = """
+                {
+                  "refreshToken": "not-a-uuid"
+                }
+                """;
+
+        mockMvc.perform(post(LOGOUT_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(rawJson))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+    }
+
+    @Test
+    @DisplayName("다른 사용자 소유의 refreshToken이면 403 FORBIDDEN을 반환한다")
+    void logout_forbidden() throws Exception {
+        willThrow(new BaseException(CommonErrorCode.FORBIDDEN))
+                .given(logoutService).logout(any());
+
+        mockMvc.perform(post(LOGOUT_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validLogoutRequestJson()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("X-User-Role이 USER/ADMIN이 아니면 403 FORBIDDEN을 반환한다")
+    void logout_disallowedRole() throws Exception {
+        mockMvc.perform(post(LOGOUT_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "GUEST")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validLogoutRequestJson()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("X-User-Id/X-User-Role 헤더가 둘 다 없으면 401 UNAUTHORIZED를 반환한다")
+    void logout_noHeaders() throws Exception {
+        mockMvc.perform(post(LOGOUT_URL)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validLogoutRequestJson()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("X-User-Role 헤더만 없으면 401 UNAUTHORIZED를 반환한다")
+    void logout_missingRoleHeader() throws Exception {
+        mockMvc.perform(post(LOGOUT_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(validLogoutRequestJson()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
     }
 
     @Test
