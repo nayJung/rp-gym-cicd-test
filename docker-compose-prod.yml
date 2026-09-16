@@ -186,6 +186,23 @@ services:
     networks:
       - shared-network
 
+  # Zipkin
+  zipkin:
+    image: openzipkin/zipkin
+    container_name: rp-gym-zipkin
+    restart: unless-stopped
+
+    environment:
+      HEALTHCHECK_IP: 127.0.0.1
+
+    expose:
+      - "9411"
+
+    networks:
+      - shared-network
+      - blue-network
+      - green-network
+
   # Eureka Blue
   eureka-server-blue:
     build:
@@ -235,6 +252,7 @@ services:
     environment:
       EUREKA_SERVER_URL: http://eureka-server-blue:19000/eureka/
       JWT_SECRET: ${JWT_SECRET}
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
 
     expose:
       - "19001"
@@ -257,6 +275,7 @@ services:
     environment:
       EUREKA_SERVER_URL: http://eureka-server-green:19000/eureka/
       JWT_SECRET: ${JWT_SECRET}
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
 
     expose:
       - "19001"
@@ -291,6 +310,8 @@ services:
       EUREKA_PREFER_IP_ADDRESS: "false"
 
       JWT_SECRET: ${JWT_SECRET}
+
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
 
     expose:
       - "19010"
@@ -334,6 +355,8 @@ services:
 
       JWT_SECRET: ${JWT_SECRET}
 
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+
     expose:
       - "19010"
 
@@ -371,6 +394,8 @@ services:
       EUREKA_SERVER_URL: http://eureka-server-blue:19000/eureka/
       EUREKA_PREFER_IP_ADDRESS: "false"
 
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+
     expose:
       - "19011"
 
@@ -405,6 +430,8 @@ services:
       EUREKA_INSTANCE_HOSTNAME: health-service-green
       EUREKA_SERVER_URL: http://eureka-server-green:19000/eureka/
       EUREKA_PREFER_IP_ADDRESS: "false"
+
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
 
     expose:
       - "19011"
@@ -443,6 +470,8 @@ services:
       EUREKA_INSTANCE_HOSTNAME: game-service-blue
       EUREKA_SERVER_URL: http://eureka-server-blue:19000/eureka/
       EUREKA_PREFER_IP_ADDRESS: "false"
+
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
 
     expose:
       - "19012"
@@ -484,6 +513,8 @@ services:
       EUREKA_SERVER_URL: http://eureka-server-green:19000/eureka/
       EUREKA_PREFER_IP_ADDRESS: "false"
 
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+
     expose:
       - "19012"
 
@@ -495,6 +526,68 @@ services:
       kafka:
         condition: service_started
       redis:
+        condition: service_started
+
+    networks:
+      - green-network
+      - shared-network
+
+  # Notification Blue
+  notification-service-blue:
+    build:
+      context: ./deploy/blue/notification
+      dockerfile: ../../Dockerfile
+
+    container_name: rp-gym-notification-blue
+    restart: unless-stopped
+
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+      EUREKA_INSTANCE_HOSTNAME: notification-service-blue
+      EUREKA_SERVER_URL: http://eureka-server-blue:19000/eureka/
+      EUREKA_PREFER_IP_ADDRESS: "false"
+
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+
+    expose:
+      - "19013"
+
+    depends_on:
+      eureka-server-blue:
+        condition: service_started
+      kafka:
+        condition: service_started
+
+    networks:
+      - blue-network
+      - shared-network
+
+  # Notification Green
+  notification-service-green:
+    build:
+      context: ./deploy/green/notification
+      dockerfile: ../../Dockerfile
+
+    container_name: rp-gym-notification-green
+    restart: unless-stopped
+
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+      EUREKA_INSTANCE_HOSTNAME: notification-service-green
+      EUREKA_SERVER_URL: http://eureka-server-green:19000/eureka/
+      EUREKA_PREFER_IP_ADDRESS: "false"
+
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+
+    expose:
+      - "19013"
+
+    depends_on:
+      eureka-server-green:
+        condition: service_started
+      kafka:
         condition: service_started
 
     networks:
