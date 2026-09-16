@@ -32,7 +32,13 @@ public class DailyHealthSummaryRepositoryImpl implements DailyHealthSummaryRepos
     }
 
     @Override
-    public List<DailyHealthSummary> findUnresolvedBefore(LocalDate date) {
-        return jpaRepository.findByActivityDateBeforeAndAchievedAtIsNullAndFailedAtIsNull(date);
+    public List<DailyHealthSummary> findUnresolvedBetween(LocalDate from, LocalDate to, int limit) {
+        return jpaRepository.findByActivityDateBetweenAndAchievedAtIsNullAndFailedAtIsNull(
+                from, to, org.springframework.data.domain.PageRequest.of(0, limit));
+    }
+
+    @Override
+    public Optional<DailyHealthSummary> findById(UUID summaryId) {
+        return jpaRepository.findById(summaryId);
     }
 }

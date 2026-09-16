@@ -1,6 +1,7 @@
 package com.workoutdone.rpgym.health.summary.adapter.in.scheduler;
 
 import com.workoutdone.rpgym.health.summary.application.DailyGoalFailureService;
+import com.workoutdone.rpgym.health.summary.domain.DailyHealthSummary;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -9,14 +10,9 @@ import org.springframework.stereotype.Component;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 
-/**
- * 일일 목표 실패 처리 스케줄러 (Driving Adapter).
- *
- * 사용자가 하루 동안 앱을 켜지 않아 동기화 자체가 없으면
- * "미달성"을 판정해 줄 트리거가 없다. 그래서 매일 자정 직후
- * 전날까지의 미해결(성공도 실패도 아닌) 기록을 일괄 실패 처리한다.
- */
+
 @Slf4j
 @Component
 @RequiredArgsConstructor
@@ -28,7 +24,20 @@ public class DailyGoalFailureScheduler {
     public void markYesterdayUnresolvedAsFailed() {
         try {
             LocalDate today = LocalDate.now(ZoneId.of("Asia/Seoul"));
-            int failedCount = dailyGoalFailureService.markUnresolvedAsFailed(today, Instant.now());
+            Instant now = Instant.now();
+            List<DailyHealthSummary> unresolved = dailyGoalFailureService.findUnresolved(today);
+
+            int failedCount = 0;
+            for (DailyHealthSummary summary : unresolved) {
+                try {
+                    if (dailyGoalFailureService.markSummaryAsFailed(summary.getSummaryId(), now)) {
+                        failedCount++;
+                    }
+                } catch (Exception e) {
+                    log.warn("summaryId={} 일일 목표 실패 처리 중 오류, 다음 배치에서 재시도한다.",
+                            summary.getSummaryId(), e);
+                }
+            }
 
             if (failedCount > 0) {
                 log.info("일일 목표 실패 처리를 완료했다. count={}", failedCount);
