@@ -48,6 +48,8 @@ public class PartyCloser {
 
 
     //MANDATORY: 호출자의 트랜잭션 안에서만 실행된다. 자리확보와 마감이 다른 트랜잭션에 있으면 안됨.
+    //MANDATORY 인 이유 — "자리 확보" 와 "마감" 이 서로 다른 트랜잭션에 있으면, 자리 확보는 커밋됐는데 마감은 실패하는 상태가 생김
+    //호출자의 트랜잭션 안에서만 돌게 강제해서 둘이 항상 같이 커밋되거나 같이 롤백되게함
     @Transactional(propagation = Propagation.MANDATORY)
     public Optional<Closed> close(UUID partyId, Instant now, Trigger trigger){
         if (!partyRepository.closeRecruiting(partyId, now)){
