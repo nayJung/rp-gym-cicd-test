@@ -38,7 +38,7 @@ public interface PartyJpaRepository extends JpaRepository<Party, UUID> {
                SET p.currentMember = p.currentMember + 1 
                where p.id = :partyId
                and p.status = :reqruiting
-               and p.matchingDeadlienAt > :now
+               and p.matchingDeadlineAt > :now
                and p.currentMember < p.maxMember
 """
     )
@@ -81,7 +81,7 @@ public interface PartyJpaRepository extends JpaRepository<Party, UUID> {
                 where p.visibility = :visibility
                 and p.status = :status
                 and p.currentMember < p.maxMember
-                and p.matchingDeadlienAt > :now
+                and p.matchingDeadlineAt > :now
                 order by  p.currentMember desc, p.createdAt asc
 """)
     List<Party> findMatchingCandidates(@Param("visibility")PartyVisibility visibility,
@@ -95,7 +95,7 @@ public interface PartyJpaRepository extends JpaRepository<Party, UUID> {
             where p.visibility = :visibility
             and p.status = :status
             and p.currentMember < p.maxMember
-            and p.matchingDeadlienAt > :now
+            and p.matchingDeadlineAt > :now
             order by p.currentMember desc, p.createdAt asc
 """)
     List<Party> findByStatusAndDeadlineBefore(@Param("status") PartyStatus status,

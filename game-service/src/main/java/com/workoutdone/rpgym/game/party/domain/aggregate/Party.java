@@ -53,7 +53,7 @@ public class Party extends BaseCreatedUpdatedEntity {
     private int currentMember;
 
     @Column(name = "matching_deadline_at", nullable = false)
-    private Instant matchingDeadlienAt;
+    private Instant matchingDeadlineAt;
 
     @Column(name = "ends_at", nullable = false, updatable = false)
     private Instant endsAt;
@@ -89,7 +89,7 @@ public class Party extends BaseCreatedUpdatedEntity {
         party.visibility = visibility;
         party.maxMember = maxMember;
         party.currentMember = 1; // 생성자 본인
-        party.matchingDeadlienAt = now.plus(recruitDuration);
+        party.matchingDeadlineAt = now.plus(recruitDuration);
         party.endsAt = now.plus(lifetime); // deadline 이 아니라 생성 기준. 직접/매칭 수명이 같아짐.
 
         return party;
@@ -102,7 +102,7 @@ public class Party extends BaseCreatedUpdatedEntity {
     public static Party restore(
             UUID id, String partyName, UUID ownerId, PartyStatus status,
             PartyVisibility visibility, int maxMember, int currentMember,
-            Instant matchingDeadlienAt, Instant endsAt
+            Instant matchingDeadlineAt, Instant endsAt
     ){
         Party party = new Party();
         party.id = id;
@@ -112,7 +112,7 @@ public class Party extends BaseCreatedUpdatedEntity {
         party.visibility = visibility;
         party.maxMember = maxMember;
         party.currentMember = currentMember;
-        party.matchingDeadlienAt = matchingDeadlienAt;
+        party.matchingDeadlineAt = matchingDeadlineAt;
         party.endsAt = endsAt;
         return party;
     }
@@ -123,12 +123,12 @@ public class Party extends BaseCreatedUpdatedEntity {
 
     /** DB 상태가 RECRUITING 이어도 마감 시각이 지났으면 모집중이 아니다. Lazy 판정*/
     public boolean isRecruiting(Instant now){
-        return status == PartyStatus.RECRUITING && now.isBefore(matchingDeadlienAt);
+        return status == PartyStatus.RECRUITING && now.isBefore(matchingDeadlineAt);
     }
 
     /** 배치가 늦어도 응답은 정확해야 한다. 조회용 상태 */
     public PartyStatus displayStatus(Instant now){
-        if (status == PartyStatus.RECRUITING && !now.isBefore(matchingDeadlienAt)){
+        if (status == PartyStatus.RECRUITING && !now.isBefore(matchingDeadlineAt)){
             return PartyStatus.ACTIVE;
         }
         return status;

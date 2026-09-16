@@ -61,7 +61,7 @@ public class PartyCommandService {
 
         log.info("파티 생성. party={} ownerId={} visibility={} members={}/{} matchingDeadlineAt={}",
                 party.getId(), userId, party.getVisibility(),party.getCurrentMember(), party.getMaxMember(),
-                party.getMatchingDeadlienAt());
+                party.getMatchingDeadlineAt());
 
         return PartyView.of(party, List.of(owner), now);
 

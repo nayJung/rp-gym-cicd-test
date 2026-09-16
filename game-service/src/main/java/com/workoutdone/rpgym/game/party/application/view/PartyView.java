@@ -41,7 +41,7 @@ public record PartyView(
                 party.getVisibility(),
                 party.getCurrentMember(),
                 party.getMaxMember(),
-                status == PartyStatus.RECRUITING ? party.getMatchingDeadlienAt() : null,
+                status == PartyStatus.RECRUITING ? party.getMatchingDeadlineAt() : null,
                 party.getEndsAt(),
                 party.getCreatedAt() == null ? null : party.getCreatedAt().toInstant(ZoneOffset.UTC),
                 members.stream().map(MemberView::from).toList()
