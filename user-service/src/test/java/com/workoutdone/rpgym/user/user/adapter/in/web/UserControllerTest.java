@@ -7,6 +7,7 @@ import com.workoutdone.rpgym.common.security.UserRole;
 import com.workoutdone.rpgym.user.user.adapter.in.web.dto.ReqLoginDto;
 import com.workoutdone.rpgym.user.user.adapter.in.web.dto.ReqRefreshTokenDto;
 import com.workoutdone.rpgym.user.user.adapter.in.web.dto.ReqSignUpDto;
+import com.workoutdone.rpgym.user.user.adapter.in.web.dto.ReqUpdateMyAccountDto;
 import com.workoutdone.rpgym.user.user.application.GetMyAccountResult;
 import com.workoutdone.rpgym.user.user.application.GetMyAccountService;
 import com.workoutdone.rpgym.user.user.application.LoginResult;
@@ -17,7 +18,10 @@ import com.workoutdone.rpgym.user.user.application.RefreshTokenService;
 import com.workoutdone.rpgym.user.user.application.SignUpCommand;
 import com.workoutdone.rpgym.user.user.application.SignUpResult;
 import com.workoutdone.rpgym.user.user.application.SignUpService;
+import com.workoutdone.rpgym.user.user.application.UpdateMyAccountResult;
 import com.workoutdone.rpgym.user.user.application.UpdateMyAccountService;
+import com.workoutdone.rpgym.user.user.application.WithdrawService;
+import com.workoutdone.rpgym.user.user.domain.User;
 import com.workoutdone.rpgym.user.user.domain.UserStatus;
 import com.workoutdone.rpgym.user.user.domain.UserErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -26,6 +30,7 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.http.MediaType;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -37,7 +42,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.BDDMockito.willThrow;
 import static org.mockito.Mockito.verify;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -68,12 +75,14 @@ class UserControllerTest {
     @MockitoBean
     private RefreshTokenService refreshTokenService;
 
-    // UserController가 GetMyAccountService/UpdateMyAccountService에도 의존하므로, 컨텍스트 로딩을 위해 Mock으로 등록해야 한다.
     @MockitoBean
     private GetMyAccountService getMyAccountService;
 
     @MockitoBean
     private UpdateMyAccountService updateMyAccountService;
+
+    @MockitoBean
+    private WithdrawService withdrawService;
 
     private ReqSignUpDto validRequest() {
         return ReqSignUpDto.builder()
@@ -588,6 +597,226 @@ class UserControllerTest {
         given(getMyAccountService.getMyAccount(userId)).willThrow(new BaseException(UserErrorCode.USER_NOT_FOUND));
 
         mockMvc.perform(get(ME_URL)
+                        .header("X-User-Id", userId.toString())
+                        .header("X-User-Role", "USER"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
+    }
+
+    private ReqUpdateMyAccountDto validUpdateRequest() {
+        return ReqUpdateMyAccountDto.builder()
+                .nickname("새닉네임")
+                .slackId("U0999XYZ000")
+                .build();
+    }
+
+    @Test
+    @DisplayName("X-User-Id/X-User-Role 헤더가 있으면 200과 함께 수정된 계정 정보를 반환한다")
+    void updateMyAccount_success() throws Exception {
+        UUID userId = UUID.randomUUID();
+        UpdateMyAccountResult result = UpdateMyAccountResult.builder()
+                .id(userId)
+                .email("healthuser@example.com")
+                .nickname("새닉네임")
+                .role(UserRole.USER)
+                .status(UserStatus.ACTIVE)
+                .slackId("U0999XYZ000")
+                .updatedAt(LocalDateTime.now())
+                .build();
+        given(updateMyAccountService.updateMyAccount(any())).willReturn(result);
+
+        mockMvc.perform(patch(ME_URL)
+                        .header("X-User-Id", userId.toString())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validUpdateRequest())))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.nickname").value("새닉네임"))
+                .andExpect(jsonPath("$.slackId").value("U0999XYZ000"));
+    }
+
+    @Test
+    @DisplayName("닉네임이 50자를 초과하면 400 INVALID_INPUT을 반환한다")
+    void updateMyAccount_nicknameTooLong() throws Exception {
+        ReqUpdateMyAccountDto request = ReqUpdateMyAccountDto.builder()
+                .nickname("가".repeat(51))
+                .build();
+
+        mockMvc.perform(patch(ME_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+    }
+
+    @Test
+    @DisplayName("newPassword가 8자 미만이면 400 INVALID_INPUT을 반환한다")
+    void updateMyAccount_newPasswordTooShort() throws Exception {
+        ReqUpdateMyAccountDto request = ReqUpdateMyAccountDto.builder()
+                .currentPassword("myPassw0rd!")
+                .newPassword("short")
+                .build();
+
+        mockMvc.perform(patch(ME_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+    }
+
+    @Test
+    @DisplayName("이미 사용 중인 닉네임이면 409 NICKNAME_DUPLICATED를 반환한다")
+    void updateMyAccount_nicknameDuplicated() throws Exception {
+        given(updateMyAccountService.updateMyAccount(any()))
+                .willThrow(new BaseException(UserErrorCode.NICKNAME_DUPLICATED));
+
+        mockMvc.perform(patch(ME_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validUpdateRequest())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("NICKNAME_DUPLICATED"));
+    }
+
+    @Test
+    @DisplayName("존재하지 않거나 탈퇴한 사용자면 404 USER_NOT_FOUND를 반환한다")
+    void updateMyAccount_userNotFound() throws Exception {
+        given(updateMyAccountService.updateMyAccount(any()))
+                .willThrow(new BaseException(UserErrorCode.USER_NOT_FOUND));
+
+        mockMvc.perform(patch(ME_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validUpdateRequest())))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("USER_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("다른 요청과 동시에 수정되어 낙관적 락(@Version) 충돌이 나면 409 CONFLICT를 반환한다")
+    void updateMyAccount_optimisticLockConflict() throws Exception {
+        UUID userId = UUID.randomUUID();
+        given(updateMyAccountService.updateMyAccount(any()))
+                .willThrow(new ObjectOptimisticLockingFailureException(User.class, userId));
+
+        mockMvc.perform(patch(ME_URL)
+                        .header("X-User-Id", userId.toString())
+                        .header("X-User-Role", "USER")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validUpdateRequest())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("CONFLICT"));
+    }
+
+    @Test
+    @DisplayName("X-User-Role이 ADMIN이면 403 FORBIDDEN을 반환한다")
+    void updateMyAccount_adminForbidden() throws Exception {
+        mockMvc.perform(patch(ME_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "ADMIN")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validUpdateRequest())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("X-User-Role이 USER가 아니면 403 FORBIDDEN을 반환한다")
+    void updateMyAccount_disallowedRole() throws Exception {
+        mockMvc.perform(patch(ME_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "GUEST")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validUpdateRequest())))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("X-User-Id/X-User-Role 헤더가 둘 다 없으면 401 UNAUTHORIZED를 반환한다")
+    void updateMyAccount_noHeaders() throws Exception {
+        mockMvc.perform(patch(ME_URL)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validUpdateRequest())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("X-User-Role 헤더만 없으면 401 UNAUTHORIZED를 반환한다")
+    void updateMyAccount_missingRoleHeader() throws Exception {
+        mockMvc.perform(patch(ME_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(validUpdateRequest())))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("X-User-Id/X-User-Role 헤더가 있으면 204를 반환하고 회원 탈퇴를 수행한다")
+    void withdraw_success() throws Exception {
+        UUID userId = UUID.randomUUID();
+
+        mockMvc.perform(delete(ME_URL)
+                        .header("X-User-Id", userId.toString())
+                        .header("X-User-Role", "USER"))
+                .andExpect(status().isNoContent());
+
+        verify(withdrawService).withdraw(userId);
+    }
+
+    @Test
+    @DisplayName("X-User-Role이 ADMIN이면 403 FORBIDDEN을 반환한다")
+    void withdraw_adminForbidden() throws Exception {
+        mockMvc.perform(delete(ME_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "ADMIN"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("X-User-Role이 USER가 아니면 403 FORBIDDEN을 반환한다")
+    void withdraw_disallowedRole() throws Exception {
+        mockMvc.perform(delete(ME_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-User-Role", "GUEST"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("X-User-Id/X-User-Role 헤더가 둘 다 없으면 401 UNAUTHORIZED를 반환한다")
+    void withdraw_noHeaders() throws Exception {
+        mockMvc.perform(delete(ME_URL))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("X-User-Role 헤더만 없으면 401 UNAUTHORIZED를 반환한다")
+    void withdraw_missingRoleHeader() throws Exception {
+        mockMvc.perform(delete(ME_URL)
+                        .header("X-User-Id", UUID.randomUUID().toString()))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
+    }
+
+    @Test
+    @DisplayName("존재하지 않는 사용자면 404 USER_NOT_FOUND를 반환한다")
+    void withdraw_userNotFound() throws Exception {
+        UUID userId = UUID.randomUUID();
+        willThrow(new BaseException(UserErrorCode.USER_NOT_FOUND))
+                .given(withdrawService).withdraw(userId);
+
+        mockMvc.perform(delete(ME_URL)
                         .header("X-User-Id", userId.toString())
                         .header("X-User-Role", "USER"))
                 .andExpect(status().isNotFound())

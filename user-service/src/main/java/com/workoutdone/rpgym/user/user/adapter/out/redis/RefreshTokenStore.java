@@ -17,6 +17,9 @@ import java.util.UUID;
 public class RefreshTokenStore {
 
     private static final String KEY_PREFIX = "refresh-token:";
+    // userId가 발급받은 refreshToken 값들을 모아두는 역인덱스(Set).
+    // refresh-token:{token} -> userId는 정방향 조회만 가능해서, 회원 탈퇴 시 "이 userId가 가진 모든 토큰"을 KEYS/SCAN 없이 찾기 위해 필요
+    private static final String OWNER_KEY_PREFIX = "refresh-token-owner:";
     private static final Duration TTL = Duration.ofDays(7); //Refresh Token 만료시간(7일)
 
     /*
@@ -41,7 +44,24 @@ public class RefreshTokenStore {
             end
             redis.call('DEL', KEYS[1])
             redis.call('SET', KEYS[2], ARGV[1], 'EX', ARGV[2])
+            redis.call('SREM', KEYS[3], ARGV[3])
+            redis.call('SADD', KEYS[3], ARGV[4])
+            redis.call('EXPIRE', KEYS[3], ARGV[2])
             return 1
+            """,
+            Long.class
+    );
+
+    // 회원 탈퇴 시 해당 userId의 refreshToken을 모두 폐기하기 위한 스크립트
+    // 역인덱스(Set)에 모인 토큰 값들을 순회하며 각각의 refresh-token:{token} 키를 지우고, 역인덱스 자체도 지운다
+    private static final RedisScript<Long> DELETE_ALL_SCRIPT = new DefaultRedisScript<>(
+            """
+            local tokens = redis.call('SMEMBERS', KEYS[1])
+            for _, token in ipairs(tokens) do
+                redis.call('DEL', ARGV[1] .. token)
+            end
+            redis.call('DEL', KEYS[1])
+            return #tokens
             """,
             Long.class
     );
@@ -49,8 +69,12 @@ public class RefreshTokenStore {
     private final StringRedisTemplate redisTemplate;
 
     // 재발급/로그아웃 시 유효성 검증을 위해 Redis에 저장 (key: refreshToken, value: userId)
+    // 역인덱스에도 함께 추가해서 회원 탈퇴 시 이 userId의 토큰을 찾을 수 있게 한다
     public void save(String refreshToken, UUID userId) {
+        String ownerKey = OWNER_KEY_PREFIX + userId;
         redisTemplate.opsForValue().set(KEY_PREFIX + refreshToken, userId.toString(), TTL);
+        redisTemplate.opsForSet().add(ownerKey, refreshToken);
+        redisTemplate.expire(ownerKey, TTL);
     }
 
     // 재발급/로그아웃 시 refreshToken으로 소유자 userId를 조회한다.
@@ -71,10 +95,22 @@ public class RefreshTokenStore {
     public boolean rotate(String oldRefreshToken, String newRefreshToken, UUID userId) {
         Long result = redisTemplate.execute(
                 ROTATE_SCRIPT,
-                List.of(KEY_PREFIX + oldRefreshToken, KEY_PREFIX + newRefreshToken),
+                List.of(KEY_PREFIX + oldRefreshToken, KEY_PREFIX + newRefreshToken, OWNER_KEY_PREFIX + userId),
                 userId.toString(),
-                String.valueOf(TTL.toSeconds())
+                String.valueOf(TTL.toSeconds()),
+                oldRefreshToken,
+                newRefreshToken
         );
         return result != null && result == 1L;
+    }
+
+    // 회원 탈퇴 시, 다중 기기/세션을 고려해 이 userId에게 발급된 모든 refreshToken을 폐기한다
+    // (로그아웃은 요청으로 전달된 토큰 1건만 지우지만, 탈퇴는 계정 자체의 사용을 종료하므로 전체를 지운다)
+    public void deleteAllByUserId(UUID userId) {
+        redisTemplate.execute(
+                DELETE_ALL_SCRIPT,
+                List.of(OWNER_KEY_PREFIX + userId),
+                KEY_PREFIX
+        );
     }
 }
