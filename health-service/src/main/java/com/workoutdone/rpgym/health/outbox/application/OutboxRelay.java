@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.Duration;
 
 import java.util.List;
 
@@ -24,6 +25,7 @@ public class OutboxRelay {
     private final EventOutboxRepository eventOutboxRepository;
     private final EventPublisherPort eventPublisherPort;
     private final OutboxPublishProperties properties;
+    private final OutboxMetrics outboxMetrics;
 
     /** @return 이번 라운드에 발행 성공한 건수 */
     @Transactional
@@ -58,6 +60,8 @@ public class OutboxRelay {
     }
 
     private boolean relay(EventOutbox outbox) {
+        long startNanos = System.nanoTime();
+
         try {
             /*
              * payload 컬럼의 문자열을 그대로 보낸다.
@@ -72,14 +76,30 @@ public class OutboxRelay {
             );
 
             outbox.markPublished();
+
+            outboxMetrics.recordPublishSuccess(
+                    outbox.getEventType(),
+                    Duration.ofNanos(System.nanoTime() - startNanos),
+                    publishLagOf(outbox)
+            );
+
             log.debug("이벤트 발행 완료. eventType={} eventId={}",
                     outbox.getEventType(), outbox.getEventId());
             return true;
 
         } catch (Exception e) {
+            outboxMetrics.recordPublishFailure(outbox.getEventType());
             handleFailure(outbox, e);
             return false;
         }
+    }
+
+    /** 적재 시각부터 발행 시각까지의 지연. 감사 시각이 없으면 0으로 본다 */
+    private Duration publishLagOf(EventOutbox outbox) {
+        if (outbox.getCreatedAt() == null || outbox.getPublishedAt() == null) {
+            return Duration.ZERO;
+        }
+        return Duration.between(outbox.getCreatedAt(), outbox.getPublishedAt());
     }
 
     private void handleFailure(EventOutbox outbox, Exception e) {
@@ -107,6 +127,7 @@ public class OutboxRelay {
             );
 
             outbox.markFailed();
+            outboxMetrics.recordDlq(outbox.getEventType());
             log.error("최대 재시도를 초과해 DLQ로 이동한다. eventId={} dlqTopic={} 시도={}",
                     outbox.getEventId(), properties.dlqTopic(), attempts, cause);
 
