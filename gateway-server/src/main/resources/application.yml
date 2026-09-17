@@ -37,6 +37,11 @@ spring:
               predicates:
                 - Path=/api/v1/games/**
 
+            - id: notification-service
+              uri: lb://notification-service
+              predicates:
+                - Path=/api/v1/notifications/**
+
 eureka:
   client:
     # Eureka Server에 Gateway 자신을 등록
