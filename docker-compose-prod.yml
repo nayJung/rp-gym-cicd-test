@@ -101,7 +101,7 @@ services:
 
   # Redis
   redis:
-    image: redis:latest
+    image: redis:8.8.2
     container_name: rp-gym-redis
     restart: unless-stopped
 
@@ -118,7 +118,7 @@ services:
 
   # Prometheus
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.14.0
     container_name: rp-gym-prometheus
     restart: unless-stopped
 
@@ -136,7 +136,7 @@ services:
 
   # Grafana
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.2.2
     container_name: rp-gym-grafana
     restart: unless-stopped
 
@@ -171,7 +171,7 @@ services:
 
   # Grafana Alloy
   alloy:
-    image: grafana/alloy:latest
+    image: grafana/alloy:v1.19.2
     container_name: rp-gym-alloy
     restart: unless-stopped
 
@@ -188,7 +188,7 @@ services:
 
   # Zipkin
   zipkin:
-    image: openzipkin/zipkin
+    image: openzipkin/zipkin:3.6.1
     container_name: rp-gym-zipkin
     restart: unless-stopped
 
@@ -598,7 +598,7 @@ services:
 
   # Nginx
   nginx:
-    image: nginx:latest
+    image: nginx:1.31.6
     container_name: rp-gym-nginx
     restart: unless-stopped
 
