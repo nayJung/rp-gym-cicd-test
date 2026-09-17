@@ -1,5 +1,7 @@
 package com.workoutdone.rpgym.game.xp.domain;
 
 public enum SourceType {
-    QUEST
+    QUEST,
+    PARTY_QUEST,
+    ACHIEVEMENT
 }
