@@ -126,6 +126,12 @@ services:
       - ./monitoring/prometheus/prometheus-prod.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
 
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
     expose:
       - "9090"
 
@@ -142,13 +148,17 @@ services:
 
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
 
     expose:
       - "3000"
 
     depends_on:
-      - prometheus
-      - loki
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
 
     networks:
       - shared-network
@@ -162,6 +172,12 @@ services:
     volumes:
       - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
       - loki-data:/loki
+
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
     expose:
       - "3100"
@@ -194,6 +210,8 @@ services:
 
     environment:
       HEALTHCHECK_IP: 127.0.0.1
+      # 인메모리 저장 상한 (기본값 유지) - 부하테스트 중 OOM/메모리 급증 방지
+      MEM_MAX_SPANS: ${ZIPKIN_MEM_MAX_SPANS:-500000}
 
     expose:
       - "9411"

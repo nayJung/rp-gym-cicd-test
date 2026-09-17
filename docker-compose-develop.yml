@@ -113,6 +113,12 @@ services:
       - ./monitoring/prometheus/prometheus-develop.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
 
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
     ports:
       - "9091:9090"
 
@@ -127,13 +133,17 @@ services:
 
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
 
     ports:
       - "3000:3000"
 
     depends_on:
-      - prometheus
-      - loki
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
 
     networks:
       - app-network
@@ -147,6 +157,12 @@ services:
     volumes:
       - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
       - loki-data:/loki
+
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3100/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
     ports:
       - "3100:3100"
@@ -176,6 +192,9 @@ services:
     image: openzipkin/zipkin:3.6.1
     container_name: rp-gym-zipkin
     restart: unless-stopped
+    environment:
+      # 인메모리 저장 상한 (기본값 유지) - 부하테스트 중 OOM/메모리 급증 방지
+      MEM_MAX_SPANS: ${ZIPKIN_MEM_MAX_SPANS:-500000}
     ports:
       - "9411:9411"
     networks:
