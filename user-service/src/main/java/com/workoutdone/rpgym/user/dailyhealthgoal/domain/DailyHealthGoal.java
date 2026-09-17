@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -39,6 +40,11 @@ public class DailyHealthGoal extends BaseCreatedUpdatedDeletedEntity {
 
     @Column(name = "active_calories_goal", nullable = false)
     private Integer activeCaloriesGoal;
+
+    // 낙관적 락
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     private DailyHealthGoal(UUID userId, Integer stepGoal, Integer activeMinutesGoal, Integer activeCaloriesGoal) {
         this.userId = userId;
