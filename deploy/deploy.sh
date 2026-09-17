@@ -123,7 +123,7 @@ check_health() {
 echo "Health Check"
 
 check_health "eureka-server-${TARGET}" "rp-gym-eureka-${TARGET}" 19000
-check_health "gateway-${TARGET}" "rp-gym-gateway-${TARGET}" 19001
+check_health "gateway-${TARGET}" "rp-gym-gateway-${TARGET}" 19091
 check_health "user-service-${TARGET}" "rp-gym-user-${TARGET}" 19010
 check_health "health-service-${TARGET}" "rp-gym-health-${TARGET}" 19011
 check_health "game-service-${TARGET}" "rp-gym-game-${TARGET}" 19012

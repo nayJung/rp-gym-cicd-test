@@ -19,13 +19,13 @@ scrape_configs:
     metrics_path: /actuator/prometheus
     static_configs:
       - targets:
-          - gateway-blue:19001
+          - gateway-blue:19091
 
   - job_name: gateway-green
     metrics_path: /actuator/prometheus
     static_configs:
       - targets:
-          - gateway-green:19001
+          - gateway-green:19091
 
   - job_name: user-blue
     metrics_path: /actuator/prometheus

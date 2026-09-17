@@ -123,7 +123,7 @@ services:
     restart: unless-stopped
 
     volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/prometheus-prod.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
 
     expose:
@@ -256,6 +256,7 @@ services:
 
     expose:
       - "19001"
+      - "19091"
 
     depends_on:
       - eureka-server-blue
@@ -279,6 +280,7 @@ services:
 
     expose:
       - "19001"
+      - "19091"
 
     depends_on:
       - eureka-server-green
