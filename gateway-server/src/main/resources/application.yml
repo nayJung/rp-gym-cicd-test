@@ -8,10 +8,19 @@ spring:
   config:
     import: optional:file:.env[.properties]
 
+  reactor:
+    # Reactor Context의 context propagation을 활성화
+    context-propagation: auto
+
   cloud:
     gateway:
       server:
         webflux:
+          # Timeout 적용
+          httpclient:
+            connect-timeout: 3000
+            response-timeout: 5s
+
           routes:
             - id: user-service
               uri: lb://user-service
@@ -45,8 +54,16 @@ management:
   endpoints:
     web:
       exposure:
-        # Gateway 상태 확인을 위한 Actuator Health Endpoint
-        include: health, info, prometheus
+        include: health, prometheus
+
+  tracing:
+    sampling:
+      # 로컬에서는 모든 요청을 trace 대상으로 잡음
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
 
 jwt:
   secret: ${JWT_SECRET}

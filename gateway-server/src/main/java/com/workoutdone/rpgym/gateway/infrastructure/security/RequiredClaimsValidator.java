@@ -9,6 +9,7 @@ import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
+import java.util.UUID;
 
 @Component
 public class RequiredClaimsValidator implements OAuth2TokenValidator<Jwt> {
@@ -21,7 +22,16 @@ public class RequiredClaimsValidator implements OAuth2TokenValidator<Jwt> {
     public OAuth2TokenValidatorResult validate(Jwt jwt) {
 
         // 사용자 식별에 필요한 sub Claim이 존재하는지 검증
-        if (jwt.getSubject() == null || jwt.getSubject().isBlank()) {
+        String subject = jwt.getSubject();
+
+        if (subject == null || subject.isBlank()) {
+            return OAuth2TokenValidatorResult.failure(INVALID_TOKEN);
+        }
+
+        // sub Claim이 UUID 형식인지 검증
+        try {
+            UUID.fromString(subject);
+        } catch (IllegalArgumentException e) {
             return OAuth2TokenValidatorResult.failure(INVALID_TOKEN);
         }
 
