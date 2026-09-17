@@ -143,7 +143,7 @@ services:
       prometheus:
         condition: service_healthy
       loki:
-        condition: service_started
+        condition: service_healthy
 
     networks:
       - app-network
@@ -160,6 +160,13 @@ services:
 
     ports:
       - "3100:3100"
+
+    healthcheck:
+      test: ["CMD", "/usr/bin/loki", "-health"]
+      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
     networks:
       - app-network
