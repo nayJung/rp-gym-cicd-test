@@ -6,6 +6,7 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -33,6 +34,11 @@ public class HealthProfile extends BaseCreatedUpdatedDeletedEntity {
 
     @Column(nullable = false, precision = 5, scale = 2)
     private BigDecimal weight;
+
+    // 낙관적 락
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     private HealthProfile(UUID userId, BigDecimal height, BigDecimal weight) {
         this.userId = userId;
