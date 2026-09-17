@@ -54,12 +54,12 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info, prometheus
+        include: health, prometheus
 
   tracing:
     sampling:
-      # 모든 요청을 trace 대상으로 잡음
-      probability: 1.0
+      # 로컬에서는 모든 요청을 trace 대상으로 잡음
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
 
   zipkin:
     tracing:
