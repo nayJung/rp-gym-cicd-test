@@ -6,6 +6,7 @@ import com.workoutdone.rpgym.health.outbox.domain.EventOutboxRepository;
 import com.workoutdone.rpgym.health.outbox.domain.HealthEventType;
 import com.workoutdone.rpgym.health.outbox.domain.OutboxStatus;
 import com.workoutdone.rpgym.health.outbox.exception.EventPublishException;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,13 +45,34 @@ class OutboxRelayTest {
 
     private OutboxRelay outboxRelay;
 
+    /**
+     * 지표는 목이 아니라 실제 객체를 쓴다.
+     * 발행 경로에서 지표를 기록하는 코드까지 실제로 실행되므로,
+     * 태그 조합이나 Duration 계산이 깨지면 이 테스트에서 드러난다.
+     */
+    private SimpleMeterRegistry meterRegistry;
+
     @BeforeEach
     void setUp() {
         // 순서: pollSize, maxRetry, sendTimeout, topic, dlqSuffix
         OutboxPublishProperties properties = new OutboxPublishProperties(
                 100, MAX_RETRY, Duration.ofSeconds(5), TOPIC, ".dlq");
 
-        outboxRelay = new OutboxRelay(eventOutboxRepository, eventPublisherPort, properties);
+        meterRegistry = new SimpleMeterRegistry();
+
+        outboxRelay = new OutboxRelay(
+                eventOutboxRepository,
+                eventPublisherPort,
+                properties,
+                new OutboxMetrics(meterRegistry));
+    }
+
+    /** event_type + result 조합의 발행 카운터 값 */
+    private double publishCount(String result) {
+        return meterRegistry.get("rpgym.outbox.publish")
+                .tags("event_type", HealthEventType.HEALTH_ACTIVITY_SYNCED.name(), "result", result)
+                .counter()
+                .count();
     }
 
     @Test
@@ -77,6 +99,8 @@ class OutboxRelayTest {
 
         // 발행 시점에 JSON을 재구성하면 eventId가 바뀐다. 저장된 문자열 그대로여야 한다.
         assertThat(payloadCaptor.getValue()).isSameAs(outbox.getPayload());
+
+        assertThat(publishCount("success")).isEqualTo(1.0);
     }
 
     @Test
@@ -97,6 +121,8 @@ class OutboxRelayTest {
         then(eventPublisherPort).should(never()).publishToDlq(
                 anyString(), anyString(), anyString(),
                 any(HealthEventType.class), anyInt(), anyString());
+
+        assertThat(publishCount("failure")).isEqualTo(1.0);
     }
 
     @Test
