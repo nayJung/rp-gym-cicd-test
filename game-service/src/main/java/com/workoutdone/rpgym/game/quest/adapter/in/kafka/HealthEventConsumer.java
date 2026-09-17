@@ -49,6 +49,9 @@ public class HealthEventConsumer {
     private final QuestProgressService questProgressService;
     private final QuestSuggestionService questSuggestionService;
 
+    // inbound(Driving) HEALTH_ACTIVITY_SYNCED, QUEST_SUGGESTED 트랜잭션을 시작하기 위한 어댑터
+    // 순서대로 T1, T2로 명명
+    // T1은 컨슈머가 accept, T2는 컨슈머가 apply
     @KafkaListener(topics = "${rpgym.kafka.health-events-topic}")
     public void consume(String message) {
         HealthEventEnvelope envelope;
@@ -56,12 +59,15 @@ public class HealthEventConsumer {
             envelope = objectMapper.readValue(message, HealthEventEnvelope.class);
         } catch (JsonProcessingException e) {
             // 재시도해도 같은 문자열이 같은 곳에서 깨진다.
+            // 재시도해도 실패할 파싱 에러(DLQ 대상)이므로 메시지를
+            // Consume하지 않고 안전하게 건너뛰려는 의도의 코드
             log.error("health event 역직렬화 실패. 건너뛴다. message={}", message, e);
             return;
         }
 
         // eventType이 null이면 아래 switch가 NPE를 던지고, 그 NPE는 무한 재시도가 된다.
-        // userId가 null이면 그대로 서비스로 내려가 저장 시점에 터진다. 둘 다 계약 위반이다.
+        // 컨슈머가 ACK를 보내지 못하고, 메시지 소비 -> NPE -> NACK -> 메시지큐 offset 미전진
+        // userId가 null이면 그대로 서비스로 내려가 저장 시점에 터진다.
         if (envelope.eventType() == null || envelope.userId() == null) {
             log.error("envelope 필수 필드 누락. 건너뛴다. eventType={} userId={}",
                     envelope.eventType(), envelope.userId());
@@ -72,9 +78,10 @@ public class HealthEventConsumer {
         MDC.put("eventId", String.valueOf(envelope.eventId()));
         MDC.put("userId", String.valueOf(envelope.userId()));
         try {
-            dispatch(envelope);
+            dispatch(envelope); // 메서드 안에 찍히는 모든 로그에 eventId, userId 붙음
         } finally {
-            MDC.remove("eventId");
+            MDC.remove("eventId"); // 서버나 메시지 컨슈머는 성능때문에 스레드 풀 방식으로 스레드 재사용
+            // MDC를 지우지 않으면 다음 다른 메시지 처리할때 이전 메시지의 MDC 정보가 남아서 지워야함.
             MDC.remove("userId");
         }
     }
@@ -88,7 +95,7 @@ public class HealthEventConsumer {
             default -> log.error("알 수 없는 eventType={}", envelope.eventType());
         }
     }
-
+    // T1 입구
     private void applySnapshot(HealthEventEnvelope envelope) {
         HealthActivitySyncedData data = convert(envelope.data(), HealthActivitySyncedData.class);
         if (data == null) {
@@ -112,6 +119,7 @@ public class HealthEventConsumer {
                 snapshot.measuredAt(), result.map(Object::toString).orElse("NO_ACTIVE_QUEST"));
     }
 
+    // T2 입구
     private void acceptSuggestion(HealthEventEnvelope envelope) {
         QuestSuggestedData data = convert(envelope.data(), QuestSuggestedData.class);
         if (data == null) {
