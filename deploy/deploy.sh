@@ -5,6 +5,7 @@ set -e
 PROJECT_PATH="/home/ubuntu/rp-gym"
 COMPOSE_FILE="${PROJECT_PATH}/docker-compose-prod.yml"
 NGINX_CONF="${PROJECT_PATH}/nginx/service-url.inc"
+DRAIN_SECONDS=10
 
 cd "${PROJECT_PATH}"
 
@@ -125,6 +126,9 @@ EOF
 fi
 
 echo "Nginx switched to gateway-${TARGET}"
+
+echo "Connection Draining: ${DRAIN_SECONDS}s"
+sleep "${DRAIN_SECONDS}"
 
 echo "Stop ${BEFORE} Environment"
 
