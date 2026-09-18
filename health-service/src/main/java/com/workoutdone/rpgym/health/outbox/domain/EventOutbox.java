@@ -35,8 +35,14 @@ import java.util.UUID;
                 @UniqueConstraint(name = "uk_health_activity_outbox_event_id",
                         columnNames = "event_id")
         },
-        indexes = @Index(name = "idx_health_activity_outbox_status",
-                columnList = "status, seq")
+        indexes = {
+                // 발행 폴링용 — PENDING을 seq 순서로 조회
+                @Index(name = "idx_health_activity_outbox_status",
+                        columnList = "status, seq"),
+                // 정리 배치용 — PUBLISHED를 published_at 기준으로 조회
+                @Index(name = "idx_health_activity_outbox_cleanup",
+                        columnList = "status, published_at")
+        }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class EventOutbox extends BaseCreatedEntity {
