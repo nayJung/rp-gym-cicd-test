@@ -215,6 +215,7 @@ jobs:
             user-service/build/libs/user-service.jar
             health-service/build/libs/health-service.jar
             game-service/build/libs/game-service.jar
+            notification-service/build/libs/notification-service.jar
 
   # CD
   deploy:
@@ -298,7 +299,8 @@ jobs:
                       /home/ubuntu/rp-gym/deploy/${TARGET}/gateway \
                       /home/ubuntu/rp-gym/deploy/${TARGET}/user \
                       /home/ubuntu/rp-gym/deploy/${TARGET}/health \
-                      /home/ubuntu/rp-gym/deploy/${TARGET}/game"
+                      /home/ubuntu/rp-gym/deploy/${TARGET}/game \
+                      /home/ubuntu/rp-gym/deploy/${TARGET}/notification"
 
           scp \
             -i ~/.ssh/ec2.pem \
@@ -324,6 +326,11 @@ jobs:
             -i ~/.ssh/ec2.pem \
             artifacts/game-service/build/libs/game-service.jar \
             ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/deploy/${TARGET}/game/app.jar
+          
+          scp \
+            -i ~/.ssh/ec2.pem \
+            artifacts/notification-service/build/libs/notification-service.jar \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/deploy/${TARGET}/notification/app.jar
 
       # deploy.sh 전달
       - name: Upload deploy script
