@@ -204,7 +204,8 @@ services:
       - alloy-data:/var/lib/alloy/data
 
     depends_on:
-      - loki
+      loki:
+        condition: service_healthy
 
     networks:
       - shared-network
