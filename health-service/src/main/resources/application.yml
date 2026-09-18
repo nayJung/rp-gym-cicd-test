@@ -139,5 +139,14 @@ management:
     web:
       exposure:
         # HTTP로 노출할 Actuator Endpoint
-        # health: 애플리케이션 상태 확인, info: 애플리케이션 정보 확인, prometheus: 메트릭 수집용
-        include: health, info, prometheus
+        # health: 애플리케이션 상태 확인, prometheus: 메트릭 수집용
+        include: health, prometheus
+
+  tracing:
+    sampling:
+      # 로컬에서는 모든 요청을 trace 대상으로 잡음
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
