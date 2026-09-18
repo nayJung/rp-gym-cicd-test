@@ -28,7 +28,7 @@ public class PartyMember extends BaseCreatedUpdatedEntity {
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
-    @Column(name = "id", nullable = false, updatable = false)
+    @Column(name = "party_id", nullable = false, updatable = false)
     private UUID partyId;
 
     @Column(name = "user_id", nullable = false, updatable = false)
