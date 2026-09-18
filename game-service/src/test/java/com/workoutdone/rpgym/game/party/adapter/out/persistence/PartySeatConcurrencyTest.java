@@ -1,5 +1,6 @@
 package com.workoutdone.rpgym.game.party.adapter.out.persistence;
 
+import com.workoutdone.rpgym.game.config.JpaAuditingConfig;
 import com.workoutdone.rpgym.game.party.domain.PartyMetric;
 import com.workoutdone.rpgym.game.party.domain.PartyStatus;
 import com.workoutdone.rpgym.game.party.domain.PartyVisibility;
@@ -9,9 +10,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
@@ -42,6 +46,12 @@ import static org.assertj.core.api.Assertions.assertThat;
         "spring.flyway.schemas=game_service"
 })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
+// @DataJpaTest 슬라이스는 일반 @Configuration 을 싣지 않는다. 안 실으면 @CreatedDate 가 비어 created_at NOT NULL 에 걸린다.
+@Import(JpaAuditingConfig.class)
+// @DataJpaTest 의 테스트 트랜잭션을 끈다. 켜 두면 메인 스레드의 INSERT 가 커밋되지 않아
+// 다른 커넥션을 쓰는 워커 스레드에는 파티가 보이지 않고, reserveSeat 가 전부 0 이 된다.
+// 대신 데이터가 컨테이너에 남으므로 각 테스트는 자기가 만든 id 로만 단언한다.
+@Transactional(propagation = Propagation.NOT_SUPPORTED)
 class PartySeatConcurrencyTest {
 
     @Container
@@ -105,17 +115,20 @@ class PartySeatConcurrencyTest {
         UUID steps = tx.execute(s -> partyJpa.saveAndFlush(Party.create(
                 UUID.randomUUID(), "steps", UUID.randomUUID(), PartyVisibility.PUBLIC, PartyMetric.STEPS, 4, now,
                 Duration.ofHours(24), Duration.ofDays(7))).getId());
-        tx.execute(s -> partyJpa.saveAndFlush(Party.create(
+        UUID calories = tx.execute(s -> partyJpa.saveAndFlush(Party.create(
                 UUID.randomUUID(), "calories", UUID.randomUUID(), PartyVisibility.PUBLIC, PartyMetric.ACTIVE_CALORIES, 4, now,
-                Duration.ofHours(24), Duration.ofDays(7))));
-        tx.execute(s -> partyJpa.saveAndFlush(Party.create(
+                Duration.ofHours(24), Duration.ofDays(7))).getId());
+        UUID privateSteps = tx.execute(s -> partyJpa.saveAndFlush(Party.create(
                 UUID.randomUUID(), "private-steps", UUID.randomUUID(), PartyVisibility.PRIVATE, PartyMetric.STEPS, 4, now,
-                Duration.ofHours(24), Duration.ofDays(7))));
+                Duration.ofHours(24), Duration.ofDays(7))).getId());
 
         List<Party> candidates = tx.execute(s -> partyJpa.findMatchingCandidates(
                 PartyMetric.STEPS, PartyVisibility.PUBLIC, PartyStatus.RECRUITING, now,
                 org.springframework.data.domain.PageRequest.of(0, 10)));
 
-        assertThat(candidates).extracting(Party::getId).containsExactly(steps);
+        // 다른 테스트가 남긴 파티가 있을 수 있어 "정확히 이것만" 이 아니라 포함/제외로 본다
+        assertThat(candidates).extracting(Party::getId)
+                .contains(steps)
+                .doesNotContain(calories, privateSteps);
     }
 }
