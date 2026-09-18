@@ -12,4 +12,8 @@ public interface DailyHealthSummaryRepository {
     Optional<DailyHealthSummary> findByUserIdAndActivityDate(UUID userId, LocalDate activityDate);
 
     List<DailyHealthSummary> findByUserIdAndActivityDateBetween(UUID userId, LocalDate from, LocalDate to);
+
+    List<DailyHealthSummary> findUnresolvedBetween(LocalDate from, LocalDate to, int limit);
+
+    Optional<DailyHealthSummary> findById(UUID summaryId);
 }

@@ -1,0 +1,41 @@
+server:
+  port: 19013
+
+spring:
+  application:
+    name: notification-service
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS}
+
+eureka:
+  instance:
+    hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
+    # Eureka Server에 주소를 등록할 때 hostname 대신 IP를 선호
+    prefer-ip-address: ${EUREKA_PREFER_IP_ADDRESS:true}
+
+  client:
+    # Eureka Server에 Notification Service 등록
+    register-with-eureka: true
+
+    # Eureka Registry의 서비스 목록을 가져옴
+    fetch-registry: true
+
+    service-url:
+      # Eureka Server 주소
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:19000/eureka/}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus
+
+  tracing:
+    sampling:
+      # 로컬에서는 모든 요청을 trace 대상으로 잡음
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
