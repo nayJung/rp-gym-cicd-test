@@ -148,7 +148,7 @@ services:
 
     environment:
       # nginx /grafana/ 경로 뒤에서 서빙하기 위한 서브패스 설정
-      GF_SERVER_ROOT_URL: "http://localhost/grafana/"
+      GF_SERVER_ROOT_URL: "${GRAFANA_ROOT_URL}"
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
 
     volumes:
