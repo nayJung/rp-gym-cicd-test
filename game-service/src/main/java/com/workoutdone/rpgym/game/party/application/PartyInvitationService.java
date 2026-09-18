@@ -10,6 +10,7 @@ import com.workoutdone.rpgym.game.party.application.view.AcceptOutcome;
 import com.workoutdone.rpgym.game.party.application.view.InvitationResultView;
 import com.workoutdone.rpgym.game.party.application.view.InvitationView;
 import com.workoutdone.rpgym.game.party.application.view.RejectResultView;
+import com.workoutdone.rpgym.game.party.domain.InvitationCloseReason;
 import com.workoutdone.rpgym.game.party.domain.InvitationStatus;
 import com.workoutdone.rpgym.game.party.domain.PartyStatus;
 import com.workoutdone.rpgym.game.party.domain.aggregate.Party;
@@ -40,6 +41,7 @@ public class PartyInvitationService {
     private final PartyInvitationRepository invitationRepository;
     private final MemberEnroller enroller;
     private final PartyCloser closer;
+    private final PartyInvitationCloser invitationCloser;
     private final PartyOutboxRecorder outboxRecorder;
     private final PartyProperties props;
     private final Clock clock;
@@ -163,7 +165,11 @@ public class PartyInvitationService {
         UUID partyId = invitation.getPartyId();
 
         if (!partyRepository.reserveSeat(partyId, now)){
-            invitationRepository.markCanceled(invitationId);
+            if (invitationRepository.markCanceled(invitationId)) {
+                //// 눌렀는데 실패했다는 걸 알려야 슬랙 버튼이 결과로 바뀐다. 전이한 호출만 싣는다.
+                invitationCloser.recordClosed(invitation, partyNameOf(partyId),
+                        InvitationCloseReason.PARTY_FULL, now);
+            }
             //// 초대가 CANCELED 로 바뀌었으니 info. 원인(정원/마감)은 한 문장 UPDATE 라 여기서 모른다.
             log.info("초대 취소 — 정원 초과 또는 마감. invitationId={} partyId={} userId={}",
                     invitationId, partyId, userId);
@@ -180,6 +186,10 @@ public class PartyInvitationService {
         Party party = partyRepository.findById(partyId)
                 .orElseThrow(() -> new IllegalStateException("자리를 확보한 파티가 없습니다: " + partyId));
 
+
+        //// 슬랙 버튼을 결과로 바꾸는 건 CLOSED 다. JOINED 는 초대 말고 생성 · 매칭으로도 나가서
+        //// invitationId 를 실을 수 없다. 두 이벤트는 대상도 쓰임도 다르다.
+        invitationCloser.recordClosed(invitation, party.getPartyName(), InvitationCloseReason.ACCEPTED, now);
 
         outboxRecorder.append(
                 PartyAggregateType.PARTY_MEMBER,
@@ -205,6 +215,13 @@ public class PartyInvitationService {
         return new AcceptOutcome.Joined(invitationId, InvitationStatus.ACCEPTED, partyId, status,
                 party.getCurrentMember(), party.getMaxMember(), now);
 
+    }
+
+    /** CLOSED 페이로드의 partyName 용. 슬랙 문구에 파티 이름이 들어가야 해서 한 번 더 읽는다. */
+    private String partyNameOf(UUID partyId) {
+        return partyRepository.findById(partyId)
+                .map(Party::getPartyName)
+                .orElseThrow(() -> new IllegalStateException("초대는 있는데 파티가 없습니다: " + partyId));
     }
 
     private AcceptOutcome alreadyJoined(PartyInvitation invitation, UUID userId) {
@@ -234,6 +251,9 @@ public class PartyInvitationService {
             log.debug("초대 거절 거부 — PENDING 아님 또는 만료. invitationId={} status={}", invitationId, invitation.getStatus());
             throw new PartyException(PartyErrorCode.INVITATION_NOT_PENDING);
         }
+        invitationCloser.recordClosed(invitation, partyNameOf(invitation.getPartyId()),
+                InvitationCloseReason.REJECTED, now);
+
         log.info("파티 초대 거절. invitationId={} partyId={} userId={}", invitationId, invitation.getPartyId(), userId);
         return new RejectResultView(invitationId, InvitationStatus.REJECTED, now);
     }

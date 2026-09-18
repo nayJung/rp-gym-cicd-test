@@ -4,6 +4,7 @@ import com.workoutdone.rpgym.game.party.domain.aggregate.PartyInvitation;
 import com.workoutdone.rpgym.game.party.domain.repo.PartyInvitationRepository;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
@@ -49,6 +50,16 @@ public class PartyInvitationRepositoryImpl implements PartyInvitationRepository 
     }
 
     @Override
+    public List<PartyInvitation> findPendingByPartyId(UUID partyId) {
+        return jpa.findByPartyIdAndStatus(partyId, PENDING);
+    }
+
+    @Override
+    public List<PartyInvitation> findPendingExpired(Instant now, int limit) {
+        return jpa.findExpired(PENDING, now, PageRequest.of(0, limit));
+    }
+
+    @Override
     public boolean markAccepted(UUID invitationId, Instant now) {
         return jpa.transition(invitationId, PENDING, ACCEPTED, now) == 1;
     }
@@ -65,12 +76,8 @@ public class PartyInvitationRepositoryImpl implements PartyInvitationRepository 
     }
 
     @Override
-    public int cancelAllPending(UUID partyId) {
-        return jpa.transitionAllByParty(partyId, PENDING, CANCELED);
-    }
-
-    @Override
-    public int expirePending(Instant now) {
-        return jpa.expireAll(PENDING, EXPIRED, now);
+    public boolean markExpired(UUID invitationId) {
+        // EXPIRED 도 사용자 응답이 아니다. "언제 닫혔나" 는 expires_at 이 이미 들고 있다.
+        return jpa.transition(invitationId, PENDING, EXPIRED, null) == 1;
     }
 }

@@ -5,7 +5,7 @@ import com.workoutdone.rpgym.game.party.domain.PartyAggregateType;
 import com.workoutdone.rpgym.game.party.domain.PartyEventType;
 import com.workoutdone.rpgym.game.party.application.payload.PartyMatchedData;
 import com.workoutdone.rpgym.game.party.domain.aggregate.Party;
-import com.workoutdone.rpgym.game.party.domain.repo.PartyInvitationRepository;
+import com.workoutdone.rpgym.game.party.domain.InvitationCloseReason;
 import com.workoutdone.rpgym.game.party.domain.repo.PartyMemberRepository;
 import com.workoutdone.rpgym.game.party.domain.repo.PartyRepository;
 import lombok.RequiredArgsConstructor;
@@ -35,7 +35,7 @@ public class PartyCloser {
 
     private final PartyRepository partyRepository;
     private final PartyMemberRepository memberRepository;
-    private final PartyInvitationRepository invitationRepository;
+    private final PartyInvitationCloser invitationCloser;
     private final PartyOutboxRecorder outboxRecorder;
 
     public record Closed(Party party,
@@ -77,7 +77,8 @@ public class PartyCloser {
         Party party = partyRepository.findById(partyId)
                 .orElseThrow(() -> new IllegalArgumentException("방금 닫은 파티가 없습니다: " + partyId));
 
-        int canceled = invitationRepository.cancelAllPending(partyId);
+        // 남은 초대를 거두고 건마다 PARTY_INVITATION_CLOSED 를 싣는다 — 슬랙 버튼을 거둘 수단이 이것뿐이다.
+        int canceled = invitationCloser.closeAllPending(party, InvitationCloseReason.PARTY_CLOSED, now);
         List<UUID> members = memberRepository.findActiveUserIdsByPartyId(partyId);
 
         outboxRecorder.append(

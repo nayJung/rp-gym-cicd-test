@@ -2,6 +2,7 @@ package com.workoutdone.rpgym.game.party.application;
 
 
 import com.workoutdone.rpgym.game.party.outbox.application.PartyOutboxRecorder;
+import com.workoutdone.rpgym.game.party.domain.InvitationCloseReason;
 import com.workoutdone.rpgym.game.party.domain.PartyAggregateType;
 import com.workoutdone.rpgym.game.party.domain.PartyEventType;
 import com.workoutdone.rpgym.game.party.domain.PartyMetric;
@@ -13,7 +14,6 @@ import com.workoutdone.rpgym.game.party.domain.PartyStatus;
 import com.workoutdone.rpgym.game.party.domain.PartyVisibility;
 import com.workoutdone.rpgym.game.party.domain.aggregate.Party;
 import com.workoutdone.rpgym.game.party.domain.aggregate.PartyMember;
-import com.workoutdone.rpgym.game.party.domain.repo.PartyInvitationRepository;
 import com.workoutdone.rpgym.game.party.domain.repo.PartyMemberRepository;
 import com.workoutdone.rpgym.game.party.domain.repo.PartyRepository;
 import lombok.RequiredArgsConstructor;
@@ -37,7 +37,7 @@ public class PartyCommandService {
 
     private final PartyRepository partyRepository;
     private final PartyMemberRepository memberRepository;
-    private final PartyInvitationRepository invitationRepository;
+    private final PartyInvitationCloser invitationCloser;
     private final MemberEnroller enroller;
     private final PartyCloser closer;
     private final PartyOutboxRecorder outboxRecorder;
@@ -137,7 +137,8 @@ public class PartyCommandService {
         }
 
         if (party.getStatus() == PartyStatus.DISBANDED){
-            invitationRepository.cancelAllPending(party.getId()); //// 없는 파티로 초대장이 살아있으면 안 된다
+            //// 없는 파티로 초대장이 살아있으면 안 된다. 받은 사람 슬랙의 버튼도 같이 거둔다.
+            invitationCloser.closeAllPending(party, InvitationCloseReason.PARTY_DISBANDED, now);
         }
         partyRepository.save(party);
 

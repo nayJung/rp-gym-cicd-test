@@ -1,12 +1,14 @@
 package com.workoutdone.rpgym.game.party.application;
 
 import com.workoutdone.rpgym.game.party.outbox.application.PartyOutboxRecorder;
+import com.workoutdone.rpgym.game.party.domain.InvitationCloseReason;
 import com.workoutdone.rpgym.game.party.domain.PartyAggregateType;
 import com.workoutdone.rpgym.game.party.domain.PartyEventType;
 import com.workoutdone.rpgym.game.party.application.payload.PartyEndedData;
 import com.workoutdone.rpgym.game.party.domain.PartyStatus;
 import com.workoutdone.rpgym.game.party.domain.PartyWeek;
 import com.workoutdone.rpgym.game.party.domain.aggregate.Party;
+import com.workoutdone.rpgym.game.party.domain.aggregate.PartyInvitation;
 import com.workoutdone.rpgym.game.party.domain.repo.PartyInvitationRepository;
 import com.workoutdone.rpgym.game.party.domain.repo.PartyMemberRepository;
 import com.workoutdone.rpgym.game.party.domain.repo.PartyRepository;
@@ -20,7 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * 시간이 되면 스스로 전이하는 세 가지. 스케줄러(PartyScheduler)가 부른다.
@@ -40,6 +44,7 @@ public class PartyLifecycleBatch {
     private final PartyMemberRepository memberRepository;
     private final PartyInvitationRepository invitationRepository;
     private final PartyCloser closer;
+    private final PartyInvitationCloser invitationCloser;
     private final PartyOutboxRecorder outboxRecorder;
     private final ApplicationEventPublisher events;   // PartyEnded → ranking 이 듣는다. party 는 누가 듣는지 모른다
     private final Clock clock;
@@ -104,11 +109,35 @@ public class PartyLifecycleBatch {
                 partyId, members.size(), week.key(), weeklyXp, endedAt);
     }
 
+    /**
+     * TTL 이 지난 초대를 EXPIRED 로 닫는다.
+     *
+     * 한 문장 UPDATE 로 한꺼번에 바꾸지 않고 행을 읽어 건별로 닫는다 — 초대마다
+     * PARTY_INVITATION_CLOSED 를 실어야 알림이 그 사람 슬랙의 버튼을 거둘 수 있기 때문이다.
+     * 한 라운드 BATCH_LIMIT 건으로 끊으므로 밀린 만큼은 다음 라운드가 가져간다.
+     */
     @Transactional
     public int expireInvitations() {
-        int expired = invitationRepository.expirePending(clock.instant());
+        Instant now = clock.instant();
+        List<PartyInvitation> due = invitationRepository.findPendingExpired(now, BATCH_LIMIT);
+        if (due.isEmpty()) {
+            return 0;
+        }
+
+        // 페이로드의 partyName 용. 초대 N 건이 같은 파티를 가리켜도 조회는 한 번이다.
+        Map<UUID, String> partyNames = partyRepository.findAllByIds(
+                        due.stream().map(PartyInvitation::getPartyId).collect(Collectors.toSet()))
+                .stream().collect(Collectors.toMap(Party::getId, Party::getPartyName));
+
+        int expired = 0;
+        for (PartyInvitation invitation : due) {
+            if (invitationCloser.close(invitation, partyNames.get(invitation.getPartyId()),
+                    InvitationCloseReason.EXPIRED, now)) {
+                expired++;
+            }
+        }
         if (expired > 0) {
-            log.info("파티 초대 만료. expired={}", expired);   // 초대 하나하나는 UPDATE 한 문장이라 id 를 모른다
+            log.info("파티 초대 만료. expired={} scanned={}", expired, due.size());   // 건별 로그는 Closer 가 남긴다
         }
         return expired;
     }

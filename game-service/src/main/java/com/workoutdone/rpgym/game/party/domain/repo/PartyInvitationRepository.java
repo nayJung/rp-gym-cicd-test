@@ -20,18 +20,21 @@ public interface PartyInvitationRepository {
 
     boolean existsPendingByPartyIdAndInviteeId(UUID partyId, UUID inviteeId);
 
+    /** 파티 마감 · 해산 시 거둬야 할 초대. 건마다 닫고 이벤트를 실어야 해서 행을 읽어 온다. */
+    List<PartyInvitation> findPendingByPartyId(UUID partyId);
+
+    /** 배치용: 만료 시각이 지난 PENDING. 오래된 것부터. */
+    List<PartyInvitation> findPendingExpired(Instant now, int limit);
+
     /** PENDING → ACCEPTED. 이미 PENDING 이 아니면 0. */
     boolean markAccepted(UUID invitationId, Instant now);
 
     /** PENDING → REJECTED. 이미 PENDING 이 아니면 0. */
     boolean markRejected(UUID invitationId, Instant now);
 
-    /** PENDING → CANCELED (한 건). 수락하려는데 자리가 없을 때. */
+    /** PENDING → CANCELED (한 건). 수락하려는데 자리가 없을 때, 파티 마감 · 해산 때. */
     boolean markCanceled(UUID invitationId);
 
-    /** 파티 마감 시 남은 PENDING 전부 CANCELED. */
-    int cancelAllPending(UUID partyId);
-
-    /** 배치용: 만료 시각이 지난 PENDING → EXPIRED. */
-    int expirePending(Instant now);
+    /** PENDING → EXPIRED (한 건). 만료 배치가 쓴다. */
+    boolean markExpired(UUID invitationId);
 }
