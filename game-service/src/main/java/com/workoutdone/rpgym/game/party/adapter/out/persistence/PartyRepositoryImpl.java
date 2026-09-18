@@ -1,5 +1,6 @@
 package com.workoutdone.rpgym.game.party.adapter.out.persistence;
 
+import com.workoutdone.rpgym.game.party.domain.PartyMetric;
 import com.workoutdone.rpgym.game.party.domain.PartyStatus;
 import com.workoutdone.rpgym.game.party.domain.PartyVisibility;
 import com.workoutdone.rpgym.game.party.domain.aggregate.Party;
@@ -59,8 +60,9 @@ public class PartyRepositoryImpl implements PartyRepository {
     }
 
     @Override
-    public List<Party> findMatchingCandidates(Instant now, int limit){
-        return jpa.findMatchingCandidates(PartyVisibility.PUBLIC, PartyStatus.RECRUITING, now, PageRequest.of(0, limit));
+    public List<Party> findMatchingCandidates(PartyMetric metric, Instant now, int limit){
+        return jpa.findMatchingCandidates(metric, PartyVisibility.PUBLIC, PartyStatus.RECRUITING, now,
+                PageRequest.of(0, limit));
     }
 
     @Override

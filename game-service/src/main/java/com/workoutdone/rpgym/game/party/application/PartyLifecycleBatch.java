@@ -1,8 +1,8 @@
 package com.workoutdone.rpgym.game.party.application;
 
-import com.workoutdone.rpgym.game.outbox.application.OutboxRecorder;
-import com.workoutdone.rpgym.game.outbox.domain.AggregateType;
-import com.workoutdone.rpgym.game.outbox.domain.OutboxEventType;
+import com.workoutdone.rpgym.game.party.outbox.application.PartyOutboxRecorder;
+import com.workoutdone.rpgym.game.party.domain.PartyAggregateType;
+import com.workoutdone.rpgym.game.party.domain.PartyEventType;
 import com.workoutdone.rpgym.game.party.application.payload.PartyEndedData;
 import com.workoutdone.rpgym.game.party.domain.PartyStatus;
 import com.workoutdone.rpgym.game.party.domain.PartyWeek;
@@ -40,7 +40,7 @@ public class PartyLifecycleBatch {
     private final PartyMemberRepository memberRepository;
     private final PartyInvitationRepository invitationRepository;
     private final PartyCloser closer;
-    private final OutboxRecorder outboxRecorder;
+    private final PartyOutboxRecorder outboxRecorder;
     private final ApplicationEventPublisher events;   // PartyEnded → ranking 이 듣는다. party 는 누가 듣는지 모른다
     private final Clock clock;
 
@@ -92,9 +92,9 @@ public class PartyLifecycleBatch {
         partyRepository.save(party);
 
         outboxRecorder.append(
-                AggregateType.PARTY,
+                PartyAggregateType.PARTY,
                 partyId,
-                OutboxEventType.PARTY_ENDED,
+                PartyEventType.PARTY_ENDED,
                 party.getOwnerId(),
                 endedAt,
                 new PartyEndedData(partyId, party.getPartyName(), members, weeklyXp, endedAt));

@@ -33,7 +33,7 @@ public record PartyWeek(String key, Instant start, Instant end) {
         int year = Integer.parseInt(key.substring(0, 4));
         int week = Integer.parseInt(key.substring(6));
         LocalDate monday = LocalDate.of(year, 1, 4) // ISO: 1월 4일이 속한 주가 1주차
-                .with(WeekFields.ISO.weekBasedYear(), week)
+                .with(WeekFields.ISO.weekOfWeekBasedYear(), week) // weekBasedYear 가 아니다 — 그걸 쓰면 "38년 1주" 가 된다
                 .with(DayOfWeek.MONDAY);
 
         return fromMonday(monday);

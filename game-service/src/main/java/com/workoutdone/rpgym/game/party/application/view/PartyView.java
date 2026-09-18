@@ -1,6 +1,7 @@
 package com.workoutdone.rpgym.game.party.application.view;
 
 import com.workoutdone.rpgym.game.party.domain.MemberRole;
+import com.workoutdone.rpgym.game.party.domain.PartyMetric;
 import com.workoutdone.rpgym.game.party.domain.PartyStatus;
 import com.workoutdone.rpgym.game.party.domain.PartyVisibility;
 import com.workoutdone.rpgym.game.party.domain.aggregate.Party;
@@ -18,6 +19,7 @@ public record PartyView(
         UUID ownerId,
         PartyStatus status,
         PartyVisibility visibility,
+        PartyMetric metric,
         int memberCount,
         int maxMember,
         Instant matchingDeadlineAt, //// ACTIVE 이후엔 null
@@ -39,6 +41,7 @@ public record PartyView(
                 party.getOwnerId(),
                 status,
                 party.getVisibility(),
+                party.getMetric(),
                 party.getCurrentMember(),
                 party.getMaxMember(),
                 status == PartyStatus.RECRUITING ? party.getMatchingDeadlineAt() : null,

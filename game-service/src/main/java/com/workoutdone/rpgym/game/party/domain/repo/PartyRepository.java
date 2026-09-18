@@ -1,5 +1,6 @@
 package com.workoutdone.rpgym.game.party.domain.repo;
 
+import com.workoutdone.rpgym.game.party.domain.PartyMetric;
 import com.workoutdone.rpgym.game.party.domain.aggregate.Party;
 
 import java.time.Instant;
@@ -38,8 +39,8 @@ public interface PartyRepository {
     /** 파티장 본인이 RECRUITING 파티를 닫는다. owner 검증까지 한 문장에 넣는다. */
     boolean closeRecruitingByOwner(UUID partyId, UUID ownerId, Instant now);
 
-    /** 자동 매칭 후보. PUBLIC · RECRUITING · 빈자리 · 마감 전. 거의 찬 파티부터. */
-    List<Party> findMatchingCandidates(Instant now, int limit);
+    /** 자동 매칭 후보. 같은 metric · PUBLIC · RECRUITING · 빈자리 · 마감 전. 거의 찬 파티부터. */
+    List<Party> findMatchingCandidates(PartyMetric metric, Instant now, int limit);
 
     /** 배치용: 마감 시각이 지났는데 아직 RECRUITING 인 파티 */
     List<Party> findRecruitingPastDeadline(Instant now, int limit);

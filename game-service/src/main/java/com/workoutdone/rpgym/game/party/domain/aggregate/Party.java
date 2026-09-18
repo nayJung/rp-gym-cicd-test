@@ -1,6 +1,7 @@
 package com.workoutdone.rpgym.game.party.domain.aggregate;
 
 import com.workoutdone.rpgym.common.entity.BaseCreatedUpdatedEntity;
+import com.workoutdone.rpgym.game.party.domain.PartyMetric;
 import com.workoutdone.rpgym.game.party.domain.PartyStatus;
 import com.workoutdone.rpgym.game.party.domain.PartyVisibility;
 import jakarta.persistence.*;
@@ -24,6 +25,8 @@ public class Party extends BaseCreatedUpdatedEntity {
      * 이 엔티티는 감소(탈퇴)와 상태전이만 존재.
      * 탈퇴는 파티 행을 비관적 락으로 잡고 하므로 안점함.
      *
+     * metric 은 생성 시 확정되고 바뀌지 않는다. 파티 퀘스트가 이 지표 하나만 보고,
+     * 자동 매칭도 같은 metric 끼리만 묶는다. 중간에 바꾸면 진행 중인 파티 퀘스트 판정이 깨진다.
      */
 
     public static final int NAME_MAX_LENGTH = 50;
@@ -46,6 +49,11 @@ public class Party extends BaseCreatedUpdatedEntity {
     @Column(name = "visibility", nullable = false, length = 10, updatable = false)
     private PartyVisibility visibility;
 
+    /** 파티 퀘스트가 볼 지표. 삼종 중 하나, 불변. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "metric", nullable = false, length = 20, updatable = false)
+    private PartyMetric metric;
+
     @Column(name = "max_member", nullable = false, updatable = false)
     private int maxMember;
 
@@ -64,6 +72,7 @@ public class Party extends BaseCreatedUpdatedEntity {
             String partyName,
             UUID ownerId,
             PartyVisibility visibility,
+            PartyMetric metric,
             int maxMember,
             Instant now,
             Duration recruitDuration,
@@ -77,6 +86,10 @@ public class Party extends BaseCreatedUpdatedEntity {
         if (name.length() > NAME_MAX_LENGTH){
             throw new IllegalArgumentException("파티 이름은 최대 " + NAME_MAX_LENGTH + "자입니다.");
         }
+        // 컨트롤러의 @NotNull 이 1차 방어지만, 매칭 경로 등 다른 진입점이 생겨도 여기서 막힌다.
+        if (metric == null){
+            throw new IllegalArgumentException("파티 메트릭은 필수입니다.");
+        }
         if (maxMember < 1){
             throw new IllegalArgumentException("정원은 1 이상이어야 합니다: " + maxMember);
         }
@@ -87,6 +100,7 @@ public class Party extends BaseCreatedUpdatedEntity {
         party.ownerId = ownerId;
         party.status = PartyStatus.RECRUITING;
         party.visibility = visibility;
+        party.metric = metric;
         party.maxMember = maxMember;
         party.currentMember = 1; // 생성자 본인
         party.matchingDeadlineAt = now.plus(recruitDuration);
@@ -101,7 +115,7 @@ public class Party extends BaseCreatedUpdatedEntity {
      */
     public static Party restore(
             UUID id, String partyName, UUID ownerId, PartyStatus status,
-            PartyVisibility visibility, int maxMember, int currentMember,
+            PartyVisibility visibility, PartyMetric metric, int maxMember, int currentMember,
             Instant matchingDeadlineAt, Instant endsAt
     ){
         Party party = new Party();
@@ -110,6 +124,7 @@ public class Party extends BaseCreatedUpdatedEntity {
         party.ownerId = ownerId;
         party.status = status;
         party.visibility = visibility;
+        party.metric = metric;
         party.maxMember = maxMember;
         party.currentMember = currentMember;
         party.matchingDeadlineAt = matchingDeadlineAt;
@@ -140,7 +155,7 @@ public class Party extends BaseCreatedUpdatedEntity {
 
     public void memberLeft(){
         if (currentMember <= 0){
-            throw new IllegalArgumentException("인원이 이미 0입니다: " + id);
+            throw new IllegalStateException("인원이 이미 0입니다: " + id);
         }
         currentMember--;
         if (currentMember == 0){

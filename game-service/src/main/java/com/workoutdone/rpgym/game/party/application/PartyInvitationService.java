@@ -1,9 +1,9 @@
 package com.workoutdone.rpgym.game.party.application;
 
 
-import com.workoutdone.rpgym.game.outbox.application.OutboxRecorder;
-import com.workoutdone.rpgym.game.outbox.domain.AggregateType;
-import com.workoutdone.rpgym.game.outbox.domain.OutboxEventType;
+import com.workoutdone.rpgym.game.party.outbox.application.PartyOutboxRecorder;
+import com.workoutdone.rpgym.game.party.domain.PartyAggregateType;
+import com.workoutdone.rpgym.game.party.domain.PartyEventType;
 import com.workoutdone.rpgym.game.party.application.payload.PartyInvitedData;
 import com.workoutdone.rpgym.game.party.application.payload.PartyMemberJoinedData;
 import com.workoutdone.rpgym.game.party.application.view.AcceptOutcome;
@@ -40,7 +40,7 @@ public class PartyInvitationService {
     private final PartyInvitationRepository invitationRepository;
     private final MemberEnroller enroller;
     private final PartyCloser closer;
-    private final OutboxRecorder outboxRecorder;
+    private final PartyOutboxRecorder outboxRecorder;
     private final PartyProperties props;
     private final Clock clock;
 
@@ -103,9 +103,9 @@ public class PartyInvitationService {
 
         //// envelope.userId = invitee. 알림 서비스가 이 값으로 Push 대상을 정한다
         outboxRecorder.append(
-                AggregateType.PARTY_INVITATION,
+                PartyAggregateType.PARTY_INVITATION,
                 invitation.getId(),
-                OutboxEventType.PARTY_INVITED,
+                PartyEventType.PARTY_INVITED,
                 inviteeId,
                 now,
                 new PartyInvitedData(invitation.getId(), party.getId(), party.getPartyName(),
@@ -182,9 +182,9 @@ public class PartyInvitationService {
 
 
         outboxRecorder.append(
-                AggregateType.PARTY_MEMBER,
+                PartyAggregateType.PARTY_MEMBER,
                 member.getId(),
-                OutboxEventType.PARTY_MEMBER_JOINED,
+                PartyEventType.PARTY_MEMBER_JOINED,
                 userId,
                 now,
                 new PartyMemberJoinedData(partyId, member.getId(), userId, member.getRole().name(),

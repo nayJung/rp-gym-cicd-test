@@ -12,6 +12,7 @@ public record PartyResponse(
         UUID ownerId,
         String status,
         String visibility,
+        String metric,
         int memberCount,
         int maxMember,
         Instant matchingDeadlineAt,
@@ -24,7 +25,7 @@ public record PartyResponse(
     public static PartyResponse from(PartyView v){
         return new PartyResponse(
                 v.partyId(), v.partyName(), v.ownerId(), v.status().name(),
-                v.visibility().name(), v.memberCount(), v.maxMember(),
+                v.visibility().name(), v.metric().name(), v.memberCount(), v.maxMember(),
                 v.matchingDeadlineAt(), v.endsAt(), v.createdAt(),
                 v.members().stream().map(m -> new Member(m.userId(),
                         m.role().name(), m.joinedAt())).toList());

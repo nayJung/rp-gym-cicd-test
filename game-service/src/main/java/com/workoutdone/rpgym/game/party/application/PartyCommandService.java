@@ -1,9 +1,10 @@
 package com.workoutdone.rpgym.game.party.application;
 
 
-import com.workoutdone.rpgym.game.outbox.application.OutboxRecorder;
-import com.workoutdone.rpgym.game.outbox.domain.AggregateType;
-import com.workoutdone.rpgym.game.outbox.domain.OutboxEventType;
+import com.workoutdone.rpgym.game.party.outbox.application.PartyOutboxRecorder;
+import com.workoutdone.rpgym.game.party.domain.PartyAggregateType;
+import com.workoutdone.rpgym.game.party.domain.PartyEventType;
+import com.workoutdone.rpgym.game.party.domain.PartyMetric;
 import com.workoutdone.rpgym.game.party.application.payload.PartyMemberLeftData;
 import com.workoutdone.rpgym.game.party.application.view.LeaveResultView;
 import com.workoutdone.rpgym.game.party.application.view.PartyView;
@@ -17,6 +18,7 @@ import com.workoutdone.rpgym.game.party.domain.repo.PartyMemberRepository;
 import com.workoutdone.rpgym.game.party.domain.repo.PartyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,30 +40,38 @@ public class PartyCommandService {
     private final PartyInvitationRepository invitationRepository;
     private final MemberEnroller enroller;
     private final PartyCloser closer;
-    private final OutboxRecorder outboxRecorder;
+    private final PartyOutboxRecorder outboxRecorder;
+    private final ApplicationEventPublisher events;
     private final PartyProperties props;
     private final Clock clock;
 
 
     ///파티 생성. parties + party_members(OWNER) 가 한 트랜잭션임.
+    ///metric 은 필수 — 파티 퀘스트가 이 지표 하나만 본다.
+    ///생성한 사람이 파티장이고, 파티장이 만든다는 것 자체가 퀘스트 생성 요청이다. 별도 API 없이 여기서 PartyQuestRequested 를 발행한다.
     @Transactional
-    public PartyView create(UUID userId, String partyName, PartyVisibility visibility){
+    public PartyView create(UUID userId, String partyName, PartyVisibility visibility, PartyMetric metric){
         enroller.assertNotInParty(userId);
 
         Instant now = clock.instant();
         Party party = partyRepository.save(Party.create(
                 UUID.randomUUID(), partyName, userId,
                 visibility == null ? PartyVisibility.PRIVATE : visibility,
+                metric,
                 props.maxMember(), now, props.recruitDuration(),
                 props.lifetime()
         ));
 
         PartyMember owner = enroller.enroll(PartyMember.owner(UUID.randomUUID(), party.getId(), userId, now));
 
+        // 퀘스트 생성 요청. 커밋 뒤 quest 가 받는다. 퀘스트 생성이 실패해도 파티 생성은 남는다.
+        events.publishEvent(new PartyQuestRequested(
+                party.getId(), userId, party.getMetric(),
+                now, party.getMatchingDeadlineAt(), party.getEndsAt()));
 
-        log.info("파티 생성. party={} ownerId={} visibility={} members={}/{} matchingDeadlineAt={}",
-                party.getId(), userId, party.getVisibility(),party.getCurrentMember(), party.getMaxMember(),
-                party.getMatchingDeadlineAt());
+        log.info("파티 생성. party={} ownerId={} visibility={} metric={} members={}/{} matchingDeadlineAt={}",
+                party.getId(), userId, party.getVisibility(), party.getMetric(),
+                party.getCurrentMember(), party.getMaxMember(), party.getMatchingDeadlineAt());
 
         return PartyView.of(party, List.of(owner), now);
 
@@ -132,9 +142,9 @@ public class PartyCommandService {
         partyRepository.save(party);
 
         outboxRecorder.append(
-                AggregateType.PARTY_MEMBER,
+                PartyAggregateType.PARTY_MEMBER,
                 me.getId(),
-                OutboxEventType.PARTY_MEMBER_LEFT,
+                PartyEventType.PARTY_MEMBER_LEFT,
                 userId,
                 now,
                 new PartyMemberLeftData(party.getId(), me.getId(), userId, party.getCurrentMember(),

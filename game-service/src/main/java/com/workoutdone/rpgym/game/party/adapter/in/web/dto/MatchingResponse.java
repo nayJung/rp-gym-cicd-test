@@ -9,6 +9,7 @@ public record MatchingResponse(
         String result,
         UUID partyId,
         String partyName,
+        String metric,
         String partyStatus,
         int memberCount,
         int maxMember,
@@ -17,7 +18,7 @@ public record MatchingResponse(
 
     public static MatchingResponse from(MatchingResultView v){
         return new MatchingResponse(v.result().name(),
-                v.partyId(), v.partyName(), v.partyStatus().name(),
+                v.partyId(), v.partyName(), v.metric().name(), v.partyStatus().name(),
         v.memberCount(), v.maxMember(), v.matchingDeadlineAt());
     }
 }

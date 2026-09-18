@@ -1,8 +1,8 @@
 package com.workoutdone.rpgym.game.party.application;
 
-import com.workoutdone.rpgym.game.outbox.application.OutboxRecorder;
-import com.workoutdone.rpgym.game.outbox.domain.AggregateType;
-import com.workoutdone.rpgym.game.outbox.domain.OutboxEventType;
+import com.workoutdone.rpgym.game.party.outbox.application.PartyOutboxRecorder;
+import com.workoutdone.rpgym.game.party.domain.PartyAggregateType;
+import com.workoutdone.rpgym.game.party.domain.PartyEventType;
 import com.workoutdone.rpgym.game.party.application.payload.PartyMatchedData;
 import com.workoutdone.rpgym.game.party.domain.aggregate.Party;
 import com.workoutdone.rpgym.game.party.domain.repo.PartyInvitationRepository;
@@ -36,7 +36,7 @@ public class PartyCloser {
     private final PartyRepository partyRepository;
     private final PartyMemberRepository memberRepository;
     private final PartyInvitationRepository invitationRepository;
-    private final OutboxRecorder outboxRecorder;
+    private final PartyOutboxRecorder outboxRecorder;
 
     public record Closed(Party party,
                          List<UUID> memberUserIds,
@@ -81,17 +81,18 @@ public class PartyCloser {
         List<UUID> members = memberRepository.findActiveUserIdsByPartyId(partyId);
 
         outboxRecorder.append(
-                AggregateType.PARTY,
+                PartyAggregateType.PARTY,
                 partyId,
-                OutboxEventType.PARTY_MATCHED,
+                PartyEventType.PARTY_MATCHED,
                 party.getOwnerId(),
                 now,
                 new PartyMatchedData(partyId, party.getPartyName(),
-                        party.getOwnerId(), members, now, party.getEndsAt())
+                        party.getOwnerId(), party.getMetric().name(), members, now, party.getEndsAt())
         );
 
-        log.info("파티 모집 마감. partyId={} by={} members={}/{} canceledInvitations={} endsAt={}",
-                partyId, trigger, party.getCurrentMember(), party.getMaxMember(), canceled, party.getEndsAt());
+        log.info("파티 모집 마감. partyId={} by={} metric={} members={}/{} canceledInvitations={} endsAt={}",
+                partyId, trigger, party.getMetric(), party.getCurrentMember(), party.getMaxMember(),
+                canceled, party.getEndsAt());
         return new Closed(party, members, canceled);
     }
 

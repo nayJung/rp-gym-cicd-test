@@ -40,7 +40,7 @@ public class PartyController {
             @Valid @RequestBody CreatePartyRequest request
     ){
         PartyResponse body = PartyResponse.from(
-                commandService.create(userId, request.partyName(), request.visibility())
+                commandService.create(userId, request.partyName(), request.visibility(), request.metric())
         );
         return ResponseEntity.status(HttpStatus.CREATED).body(body);
     }
@@ -64,14 +64,14 @@ public class PartyController {
     }
 
 
-    ///본문은 선택 (required = false)
+    ///metric 이 필수가 되면서 본문도 필수다. 없으면 400.
     @PostMapping("/matching")
     public ResponseEntity<MatchingResponse> match(
             @RequestHeader("X-User-Id") UUID userId,
-            @Valid @RequestBody(required = false) MatchingRequest request
+            @Valid @RequestBody MatchingRequest request
     ){
-        String partyName = request == null ? null : request.partyName();
-        return ResponseEntity.ok(MatchingResponse.from(matchingService.match(userId, partyName)));
+        return ResponseEntity.ok(MatchingResponse.from(
+                matchingService.match(userId, request.partyName(), request.metric())));
     }
 
     @PostMapping("/{partyId}/start")
