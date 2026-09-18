@@ -125,6 +125,8 @@ rpgym:
   kafka:
     #  이벤트 계약 -- Health 3종을 한 토픽으로 통합했다
     health-events-topic: health.events
+    # 슬랙 버튼의 응답이 돌아오는 토픽. Notification 이 발행하고 game 이 구독한다 (잠정값)
+    notification-events-topic: notification.events
 
   outbox:
     # 발행 토픽. 소비 측(Notification)과 맞춰야 하는 값이라 팀 확인이 필요하다 (잠정값)
@@ -158,3 +160,10 @@ rpgym:
       close-interval: 10000
       # 파티 종료 · 초대 만료 정리 주기(ms)
       end-interval: 60000
+    outbox:
+      # 파티 전용 outbox(party_outbox_events) 릴레이. 토픽은 quest 와 같은 game.events — Notification 이 eventType 헤더로 분기한다
+      topic: game.events
+      poll-interval: 1000
+      poll-size: 100
+      send-timeout: 5s
+      escalate-after: 10

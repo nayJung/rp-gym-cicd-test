@@ -108,26 +108,48 @@ CREATE INDEX idx_party_invitations_party_pending
     ON game_service.party_invitations (party_id)
     WHERE status = 'PENDING';
 
--- 만료 정리 배치
+-- 만료 정리 배치. 만료된 PENDING 을 오래된 순으로 limit 만큼 읽어 건별로 닫는다.
 CREATE INDEX idx_party_invitations_expires
     ON game_service.party_invitations (expires_at)
     WHERE status = 'PENDING';
 
 -- ============================================================
--- outbox_events — 파티 이벤트 허용
+-- party_outbox_events — 파티 전용 Outbox
 -- ============================================================
--- V2 의 CHECK 가 QUEST 만 허용한다. 제약 이름은 V2 와 동일하게 다시 건다.
-ALTER TABLE game_service.outbox_events
-DROP CONSTRAINT ck_outbox_events_aggregate_type;
-ALTER TABLE game_service.outbox_events
-    ADD CONSTRAINT ck_outbox_events_aggregate_type
-        CHECK (aggregate_type IN ('QUEST', 'PARTY', 'PARTY_MEMBER', 'PARTY_INVITATION'));
+-- outbox_events(quest 소유)와 구조는 같고 테이블만 다르다. 파티 이벤트를 위해 quest 쪽 CHECK 제약을
+-- 건드리지 않으려고 분리했다. 발행 토픽은 같은 game.events 이고 소비 측은 eventType 헤더로만 분기한다.
+CREATE TABLE game_service.party_outbox_events (
+    outbox_id      UUID        NOT NULL,
+    aggregate_type VARCHAR(30) NOT NULL,
+    aggregate_id   UUID        NOT NULL,
+    event_type     VARCHAR(50) NOT NULL,
+    event_id       UUID        NOT NULL,
+    partition_key  VARCHAR(50) NOT NULL,
+    payload        JSONB       NOT NULL,
+    status         VARCHAR(20) NOT NULL DEFAULT 'PENDING',
+    retry_count    INTEGER     NOT NULL DEFAULT 0,
+    created_at     TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    published_at   TIMESTAMPTZ,
 
-ALTER TABLE game_service.outbox_events
-DROP CONSTRAINT ck_outbox_events_event_type;
-ALTER TABLE game_service.outbox_events
-    ADD CONSTRAINT ck_outbox_events_event_type
-        CHECK (event_type IN (
-                              'QUEST_CREATED', 'QUEST_COMPLETED',
-                              'PARTY_INVITED', 'PARTY_MEMBER_JOINED', 'PARTY_MEMBER_LEFT', 'PARTY_MATCHED', 'PARTY_ENDED'
-            ));
+    CONSTRAINT pk_party_outbox_events PRIMARY KEY (outbox_id),
+    CONSTRAINT ck_party_outbox_events_retry_count CHECK (retry_count >= 0),
+    CONSTRAINT ck_party_outbox_events_aggregate_type
+        CHECK (aggregate_type IN ('PARTY', 'PARTY_MEMBER', 'PARTY_INVITATION')),
+    -- PARTY_INVITATION_CLOSED = 초대의 끝(수락 · 거절 · 만료 · 취소). 알림이 슬랙 버튼을 거두는 신호다.
+    CONSTRAINT ck_party_outbox_events_event_type
+        CHECK (event_type IN ('PARTY_INVITED', 'PARTY_INVITATION_CLOSED', 'PARTY_MEMBER_JOINED',
+                              'PARTY_MEMBER_LEFT', 'PARTY_MATCHED', 'PARTY_ENDED')),
+    CONSTRAINT ck_party_outbox_events_status CHECK (status IN ('PENDING', 'PUBLISHED'))
+);
+
+CREATE UNIQUE INDEX uk_party_outbox_events_event_id
+    ON game_service.party_outbox_events (event_id);
+
+-- 같은 애그리거트에 같은 이벤트가 두 번 적재되는 것을 막는다.
+-- PARTY_MEMBER_JOINED 는 멤버 행(id) 기준이라 유저가 다른 파티에 다시 들어가도 충돌하지 않는다.
+CREATE UNIQUE INDEX uk_party_outbox_events_aggregate
+    ON game_service.party_outbox_events (aggregate_type, aggregate_id, event_type);
+
+-- 릴레이 폴링. (status, created_at) 순으로 PENDING 만 집는다.
+CREATE INDEX idx_party_outbox_events_status
+    ON game_service.party_outbox_events (status, created_at);

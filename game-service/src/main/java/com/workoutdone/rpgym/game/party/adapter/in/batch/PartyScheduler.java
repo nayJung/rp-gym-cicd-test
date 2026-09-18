@@ -2,6 +2,7 @@ package com.workoutdone.rpgym.game.party.adapter.in.batch;
 
 
 import com.workoutdone.rpgym.game.party.application.PartyLifecycleBatch;
+import com.workoutdone.rpgym.game.party.outbox.application.PartyOutboxRelay;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -22,6 +23,20 @@ import java.util.UUID;
 public class PartyScheduler {
 
     private final PartyLifecycleBatch batch;
+    private final PartyOutboxRelay outboxRelay;
+
+    /// 파티 outbox 릴레이. quest 의 OutboxPublishScheduler 와 같은 주기·같은 규칙이지만 테이블이 다르다.
+    @Scheduled(fixedDelayString = "${rpgym.party.outbox.poll-interval:1000}")
+    public void publishPendingPartyEvents(){
+        try{
+            int published = outboxRelay.relayOnce();
+            if (published > 0){
+                log.debug("파티 outbox 발행 count={}", published);
+            }
+        }catch(Exception e){
+            log.error("파티 outbox 폴링 실패", e); // 스케줄 스레드로 새어나가면 이후 실행이 멈춤
+        }
+    }
 
     @Scheduled(fixedDelayString = "${rpgym.party.batch.close-interval:10000}")
     public void closeDueRecruiting(){

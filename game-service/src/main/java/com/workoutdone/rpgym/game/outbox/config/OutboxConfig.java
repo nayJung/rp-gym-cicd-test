@@ -1,6 +1,5 @@
 package com.workoutdone.rpgym.game.outbox.config;
 
-import com.workoutdone.rpgym.game.party.application.PartyProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableScheduling;
@@ -11,8 +10,6 @@ import org.springframework.scheduling.annotation.EnableScheduling;
  */
 @Configuration
 @EnableScheduling
-@EnableConfigurationProperties({OutboxPublishProperties.class,
-PartyProperties.class})
+@EnableConfigurationProperties(OutboxPublishProperties.class)
 public class OutboxConfig {
 }
-//별도 PartyConfig를 만들어도 됨
