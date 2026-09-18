@@ -244,6 +244,13 @@ services:
     expose:
       - "19000"
 
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:19000/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     networks:
       - blue-network
 
@@ -262,9 +269,15 @@ services:
     expose:
       - "19000"
 
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:19000/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     networks:
       - green-network
-
 
   # Gateway Blue
   gateway-blue:
@@ -284,8 +297,16 @@ services:
       - "19001"
       - "19091"
 
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:19091/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
-      - eureka-server-blue
+      eureka-server-blue:
+        condition: service_healthy
 
     networks:
       - blue-network
@@ -308,8 +329,16 @@ services:
       - "19001"
       - "19091"
 
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:19091/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
-      - eureka-server-green
+      eureka-server-green:
+        condition: service_healthy
 
     networks:
       - green-network
@@ -344,11 +373,18 @@ services:
     expose:
       - "19010"
 
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:19010/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
       postgres-user:
         condition: service_healthy
       eureka-server-blue:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
       redis:
@@ -388,11 +424,18 @@ services:
     expose:
       - "19010"
 
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:19010/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
       postgres-user:
         condition: service_healthy
       eureka-server-green:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
       redis:
@@ -427,11 +470,18 @@ services:
     expose:
       - "19011"
 
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:19011/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
       postgres-health:
         condition: service_healthy
       eureka-server-blue:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
 
@@ -464,11 +514,18 @@ services:
     expose:
       - "19011"
 
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:19011/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
       postgres-health:
         condition: service_healthy
       eureka-server-green:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
 
@@ -504,11 +561,18 @@ services:
     expose:
       - "19012"
 
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:19012/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
       postgres-game:
         condition: service_healthy
       eureka-server-blue:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
       redis:
@@ -546,11 +610,18 @@ services:
     expose:
       - "19012"
 
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:19012/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
       postgres-game:
         condition: service_healthy
       eureka-server-green:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
       redis:
@@ -581,9 +652,16 @@ services:
     expose:
       - "19013"
 
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:19013/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
       eureka-server-blue:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
 
@@ -612,9 +690,16 @@ services:
     expose:
       - "19013"
 
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:19013/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
       eureka-server-green:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
 
