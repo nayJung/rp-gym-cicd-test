@@ -287,6 +287,7 @@ services:
 
     container_name: rp-gym-gateway-blue
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       EUREKA_SERVER_URL: http://eureka-server-blue:19000/eureka/
@@ -319,6 +320,7 @@ services:
 
     container_name: rp-gym-gateway-green
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       EUREKA_SERVER_URL: http://eureka-server-green:19000/eureka/
@@ -351,6 +353,7 @@ services:
 
     container_name: rp-gym-user-blue
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       POSTGRES_URL: jdbc:postgresql://postgres-user:5432/user_db
@@ -402,6 +405,7 @@ services:
 
     container_name: rp-gym-user-green
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       POSTGRES_URL: jdbc:postgresql://postgres-user:5432/user_db
@@ -453,6 +457,7 @@ services:
 
     container_name: rp-gym-health-blue
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       POSTGRES_URL: jdbc:postgresql://postgres-health:5432/health_db
@@ -497,6 +502,7 @@ services:
 
     container_name: rp-gym-health-green
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       POSTGRES_URL: jdbc:postgresql://postgres-health:5432/health_db
@@ -541,6 +547,7 @@ services:
 
     container_name: rp-gym-game-blue
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       POSTGRES_URL: jdbc:postgresql://postgres-game:5432/game_db
@@ -590,6 +597,7 @@ services:
 
     container_name: rp-gym-game-green
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       POSTGRES_URL: jdbc:postgresql://postgres-game:5432/game_db
@@ -639,6 +647,7 @@ services:
 
     container_name: rp-gym-notification-blue
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -677,6 +686,7 @@ services:
 
     container_name: rp-gym-notification-green
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
