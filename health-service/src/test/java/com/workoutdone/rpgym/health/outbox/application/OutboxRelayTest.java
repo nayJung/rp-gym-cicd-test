@@ -77,7 +77,7 @@ class OutboxRelayTest {
 
     @Test
     @DisplayName("발행에 성공하면 PUBLISHED로 전이하고 payload 원문을 그대로 보낸다")
-    void 발행_성공() {
+    void marksPublishedOnSuccess() {
         // given
         EventOutbox outbox = pendingOutbox();
         given(eventOutboxRepository.findPendingForUpdate(anyInt())).willReturn(List.of(outbox));
@@ -105,7 +105,7 @@ class OutboxRelayTest {
 
     @Test
     @DisplayName("발행에 실패하고 재시도 여유가 있으면 PENDING을 유지하고 retryCount만 늘린다")
-    void 발행_실패_재시도() {
+    void keepsPendingWhenRetryBudgetRemains() {
         // given
         EventOutbox outbox = pendingOutbox();
         given(eventOutboxRepository.findPendingForUpdate(anyInt())).willReturn(List.of(outbox));
@@ -127,7 +127,7 @@ class OutboxRelayTest {
 
     @Test
     @DisplayName("최대 재시도에 도달하면 DLQ로 보내고 FAILED로 종료한다")
-    void 최대_재시도_초과시_DLQ() {
+    void movesToDlqWhenRetryExhausted() {
         // given — 이미 MAX_RETRY - 1회 실패한 상태
         EventOutbox outbox = pendingOutbox();
         failBefore(outbox, MAX_RETRY - 1);
@@ -150,7 +150,7 @@ class OutboxRelayTest {
 
     @Test
     @DisplayName("DLQ 발행까지 실패하면 PENDING으로 되돌려 다음 폴링에서 재시도한다")
-    void DLQ_발행_실패() {
+    void revertsToPendingWhenDlqFails() {
         // given
         EventOutbox outbox = pendingOutbox();
         failBefore(outbox, MAX_RETRY - 1);
@@ -170,7 +170,7 @@ class OutboxRelayTest {
 
     @Test
     @DisplayName("한 건이 실패하면 같은 라운드의 뒤 이벤트는 발행하지 않는다")
-    void 실패시_라운드_중단() {
+    void stopsRoundOnFirstFailure() {
         // given
         EventOutbox first = pendingOutbox();
         EventOutbox second = pendingOutbox();
