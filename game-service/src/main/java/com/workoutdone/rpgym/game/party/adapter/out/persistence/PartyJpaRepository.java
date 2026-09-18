@@ -1,5 +1,6 @@
 package com.workoutdone.rpgym.game.party.adapter.out.persistence;
 
+import com.workoutdone.rpgym.game.party.domain.PartyMetric;
 import com.workoutdone.rpgym.game.party.domain.PartyStatus;
 import com.workoutdone.rpgym.game.party.domain.PartyVisibility;
 import com.workoutdone.rpgym.game.party.domain.aggregate.Party;
@@ -37,7 +38,7 @@ public interface PartyJpaRepository extends JpaRepository<Party, UUID> {
                update Party p
                SET p.currentMember = p.currentMember + 1 
                where p.id = :partyId
-               and p.status = :reqruiting
+               and p.status = :recruiting
                and p.matchingDeadlineAt > :now
                and p.currentMember < p.maxMember
 """
@@ -75,28 +76,29 @@ public interface PartyJpaRepository extends JpaRepository<Party, UUID> {
                                @Param("active") PartyStatus active,
                                @Param("now") Instant now);
 
-    /////거의 찬 파티부터, 같으면 오래된 파티부터. idx_parties_matching 을 탄다.
+    /////같은 metric 중에서 거의 찬 파티부터, 같으면 오래된 파티부터. idx_parties_matching(metric, current_member, created_at) 을 탄다.
     @Query("""
                 select p from Party p
-                where p.visibility = :visibility
+                where p.metric = :metric
+                and p.visibility = :visibility
                 and p.status = :status
                 and p.currentMember < p.maxMember
                 and p.matchingDeadlineAt > :now
                 order by  p.currentMember desc, p.createdAt asc
 """)
-    List<Party> findMatchingCandidates(@Param("visibility")PartyVisibility visibility,
+    List<Party> findMatchingCandidates(@Param("metric") PartyMetric metric,
+                                       @Param("visibility") PartyVisibility visibility,
                                        @Param("status") PartyStatus status,
                                        @Param("now") Instant now,
                                        Pageable pageable);
 
 
+    ////배치용: 마감 시각이 지났는데 아직 RECRUITING 인 파티. idx_parties_recruiting_deadline 을 탄다.
     @Query("""
             select p from Party p
-            where p.visibility = :visibility
-            and p.status = :status
-            and p.currentMember < p.maxMember
-            and p.matchingDeadlineAt > :now
-            order by p.currentMember desc, p.createdAt asc
+            where p.status = :status
+            and p.matchingDeadlineAt <= :now
+            order by p.matchingDeadlineAt asc
 """)
     List<Party> findByStatusAndDeadlineBefore(@Param("status") PartyStatus status,
                                               @Param("now") Instant now,
