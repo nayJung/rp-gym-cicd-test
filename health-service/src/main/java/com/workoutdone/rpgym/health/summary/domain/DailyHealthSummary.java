@@ -15,6 +15,8 @@ import org.hibernate.annotations.UuidGenerator;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
+import java.time.Duration;
+
 
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -54,6 +56,9 @@ public class DailyHealthSummary extends BaseCreatedUpdatedEntity {
 
     @Column(name = "achieved_at")
     private Instant achievedAt;
+
+    @Column(name = "failed_at")
+    private Instant failedAt;
 
     @Column(name = "last_synced_at", nullable = false)
     private Instant lastSyncedAt;
@@ -102,12 +107,21 @@ public class DailyHealthSummary extends BaseCreatedUpdatedEntity {
         return true;
     }
 
-    public boolean markQuestSuggested(Instant now) {
-        if (this.questSuggestedAt != null) {
+    public boolean markAsFailed(Instant now) {
+        if (this.achievedAt != null || this.failedAt != null) {
             return false;
         }
-        this.questSuggestedAt = now;
+        this.failedAt = now;
         return true;
+    }
+
+    public boolean isQuestSuggestionDue(Instant now, Duration suggestionInterval) {
+        return this.questSuggestedAt == null
+                || !now.isBefore(this.questSuggestedAt.plus(suggestionInterval));
+    }
+
+    public void recordQuestSuggested(Instant now) {
+        this.questSuggestedAt = now;
     }
 
     private boolean hasSameSnapshot(int steps, int activeMinutes, int activeCalories) {

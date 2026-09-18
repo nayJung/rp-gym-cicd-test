@@ -13,4 +13,7 @@ public interface DailyHealthSummaryJpaRepository extends JpaRepository<DailyHeal
     Optional<DailyHealthSummary> findByUserIdAndActivityDate(UUID userId, LocalDate activityDate);
 
     List<DailyHealthSummary> findByUserIdAndActivityDateBetween(UUID userId, LocalDate from, LocalDate to);
+
+    List<DailyHealthSummary> findByActivityDateBetweenAndAchievedAtIsNullAndFailedAtIsNull(
+            LocalDate from, LocalDate to, org.springframework.data.domain.Pageable pageable);
 }
