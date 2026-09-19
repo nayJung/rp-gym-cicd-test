@@ -9,6 +9,21 @@ DRAIN_SECONDS=10
 
 cd "${PROJECT_PATH}"
 
+ENV_FILE="${PROJECT_PATH}/.env"
+
+if [ ! -f "${ENV_FILE}" ]; then
+    echo ".env file not found: ${ENV_FILE}"
+    exit 1
+fi
+
+for VAR in ZIPKIN_UI_USER ZIPKIN_UI_PASSWORD_HASH GRAFANA_ROOT_URL
+do
+    if ! grep -qE "^${VAR}=.+" "${ENV_FILE}"; then
+        echo "Required environment variable is missing or empty: ${VAR}"
+        exit 1
+    fi
+done
+
 echo "Blue-Green Deploy Start"
 
 if [ ! -f "${NGINX_CONF}" ]; then
@@ -67,7 +82,7 @@ docker compose -f "${COMPOSE_FILE}" up -d \
 
 echo "Build & Start ${TARGET}"
 
-if ! docker compose -f "${COMPOSE_FILE}" up -d --build --wait --wait-timeout 180 "${TARGET_SERVICES[@]}"; then
+if ! docker compose -f "${COMPOSE_FILE}" up -d --build --wait --wait-timeout 300 "${TARGET_SERVICES[@]}"; then
     echo "Target environment failed to become healthy."
     docker compose -f "${COMPOSE_FILE}" ps
     docker compose -f "${COMPOSE_FILE}" logs --tail=100 "${TARGET_SERVICES[@]}"
