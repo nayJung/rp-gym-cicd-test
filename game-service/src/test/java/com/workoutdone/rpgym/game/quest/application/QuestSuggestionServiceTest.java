@@ -3,58 +3,53 @@ package com.workoutdone.rpgym.game.quest.application;
 import com.workoutdone.rpgym.game.outbox.application.OutboxRecorder;
 import com.workoutdone.rpgym.game.outbox.domain.AggregateType;
 import com.workoutdone.rpgym.game.outbox.domain.OutboxEventType;
+import com.workoutdone.rpgym.game.quest.application.payload.QuestSuggestedData;
 import com.workoutdone.rpgym.game.quest.domain.Metric;
-import com.workoutdone.rpgym.game.quest.domain.QuestStatus;
-import com.workoutdone.rpgym.game.quest.domain.aggregate.Quest;
-import com.workoutdone.rpgym.game.quest.domain.aggregate.UserLatestSnapshot;
-import com.workoutdone.rpgym.game.quest.domain.repo.QuestRepository;
-import com.workoutdone.rpgym.game.quest.domain.repo.UserLatestSnapshotRepository;
-import com.workoutdone.rpgym.game.quest.domain.vo.Snapshot;
+import com.workoutdone.rpgym.game.quest.domain.SuggestionStatus;
+import com.workoutdone.rpgym.game.quest.domain.aggregate.QuestSuggestion;
+import com.workoutdone.rpgym.game.quest.domain.repo.QuestSuggestionRepository;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.util.Optional;
 import java.util.UUID;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+// 제안을 받아서 보관하는 경로의 테스트다.
+// 스프링 컨텍스트를 띄우지 않는다. 저장소와 아웃박스를 대체해서 판정만 본다.
 class QuestSuggestionServiceTest {
 
     private static final UUID USER_ID = UUID.randomUUID();
     private static final LocalDate DATE = LocalDate.of(2026, 8, 28);
     private static final Instant BASED_ON = Instant.parse("2026-08-28T01:30:00Z");
 
-    private QuestRepository questRepository;
-    private UserLatestSnapshotRepository snapshotRepository;
+    private QuestSuggestionRepository suggestionRepository;
     private OutboxRecorder outboxRecorder;
     private QuestSuggestionService service;
 
     @BeforeEach
     void setUp() {
-        questRepository = mock(QuestRepository.class);
-        snapshotRepository = mock(UserLatestSnapshotRepository.class);
+        suggestionRepository = mock(QuestSuggestionRepository.class);
         outboxRecorder = mock(OutboxRecorder.class);
-        service = new QuestSuggestionService(
-                questRepository, snapshotRepository, new RewardPolicy(), outboxRecorder);
+        service = new QuestSuggestionService(suggestionRepository, outboxRecorder);
 
-        when(questRepository.findActiveByUserId(any(), any())).thenReturn(Optional.empty());
-        when(questRepository.save(any())).thenAnswer(call -> call.getArgument(0));
-        when(snapshotRepository.findByUserId(USER_ID)).thenReturn(Optional.of(storedSnapshot()));
-    }
-
-    private UserLatestSnapshot storedSnapshot() {
-        return UserLatestSnapshot.create(USER_ID, new Snapshot(DATE, BASED_ON, 3000, 31, 155));
+        when(suggestionRepository.existsBySuggestionId(any())).thenReturn(false);
+        when(suggestionRepository.save(any())).thenAnswer(call -> call.getArgument(0));
     }
 
     private QuestSuggestionCommand command(String metric, int targetValue) {
@@ -67,97 +62,105 @@ class QuestSuggestionServiceTest {
     }
 
     @Test
-    @DisplayName("baseline은 저장된 스냅샷의 metric 값으로 고정된다")
-    void baseline은_저장된_스냅샷에서_온다() {
-        ArgumentCaptor<Quest> saved = ArgumentCaptor.forClass(Quest.class);
+    @DisplayName("저장된 제안은 대기 상태이고 아직 퀘스트가 붙어 있지 않다")
+    void 저장된_제안은_대기_상태다() {
+        ArgumentCaptor<QuestSuggestion> saved = ArgumentCaptor.forClass(QuestSuggestion.class);
+        QuestSuggestionCommand command = validCommand();
 
-        assertEquals(SuggestionOutcome.CREATED, service.accept(validCommand()));
+        assertEquals(SuggestionOutcome.STORED, service.store(command));
 
-        verify(questRepository).save(saved.capture());
-        Quest quest = saved.getValue();
-        assertEquals(Metric.ACTIVE_MINUTES, quest.getMetric());
-        assertEquals(31, quest.getBaselineVal());
-        assertEquals(BASED_ON, quest.getBaselineMeasuredAt());
-        assertEquals(20, quest.getTargetVal());
-        assertEquals(5, quest.getRewardXp());
-        assertEquals(QuestStatus.ACTIVE, quest.getStatus());
+        verify(suggestionRepository).save(saved.capture());
+        QuestSuggestion suggestion = saved.getValue();
+        assertEquals(command.suggestionId(), suggestion.getSuggestionId());
+        assertEquals(USER_ID, suggestion.getUserId());
+        assertEquals(Metric.ACTIVE_MINUTES, suggestion.getMetric());
+        assertEquals(20, suggestion.getTargetVal());
+        assertEquals(DATE, suggestion.getActivityDate());
+        assertEquals(BASED_ON, suggestion.getBasedOnMeasuredAt());
+        assertEquals(SuggestionStatus.PENDING, suggestion.getStatus());
+        assertNull(suggestion.getQuestId());
+        assertNull(suggestion.getDecidedAt());
     }
 
     @Test
-    @DisplayName("만료 시각은 activityDate의 KST 23:59:59다")
-    void 만료는_당일_KST_자정_직전이다() {
-        ArgumentCaptor<Quest> saved = ArgumentCaptor.forClass(Quest.class);
+    @DisplayName("만료 시각은 이벤트가 들고 온 측정 시각에 30분을 더한 값이다 — 서버 시계가 아니다")
+    void 만료는_측정_시각_기준_30분이다() {
+        ArgumentCaptor<QuestSuggestion> saved = ArgumentCaptor.forClass(QuestSuggestion.class);
 
-        service.accept(validCommand());
+        service.store(validCommand());
 
-        verify(questRepository).save(saved.capture());
-        assertEquals(Instant.parse("2026-08-28T14:59:59Z"), saved.getValue().getExpiredAt());
+        verify(suggestionRepository).save(saved.capture());
+        // 서버 시계를 썼다면 이 테스트를 돌리는 지금 시각 기준이 되어 값이 매번 달라진다.
+        // 측정 시각 기준이라서 몇 년 뒤에 돌려도 같은 값이 나온다.
+        assertEquals(BASED_ON.plus(Duration.ofMinutes(30)), saved.getValue().getExpiresAt());
     }
 
     @Test
-    @DisplayName("생성되면 QuestCreated가 Outbox에 적재된다")
-    void 생성되면_Outbox에_적재된다() {
-        service.accept(validCommand());
+    @DisplayName("저장되면 알림용 이벤트가 아웃박스에 적재된다")
+    void 저장되면_아웃박스에_적재된다() {
+        ArgumentCaptor<QuestSuggestedData> payload = ArgumentCaptor.forClass(QuestSuggestedData.class);
+        QuestSuggestionCommand command = validCommand();
+
+        service.store(command);
 
         verify(outboxRecorder).append(
-                eq(AggregateType.QUEST), any(), eq(OutboxEventType.QUEST_CREATED),
-                eq(USER_ID), eq(BASED_ON), any());
+                eq(AggregateType.QUEST_SUGGESTION),
+                eq(command.suggestionId()),
+                eq(OutboxEventType.QUEST_SUGGESTED),
+                eq(USER_ID),
+                eq(BASED_ON),
+                payload.capture());
+
+        // 카드를 그리는 데 필요한 것만 실린다.
+        assertEquals(command.suggestionId(), payload.getValue().suggestionId());
+        assertEquals("20분 산책하기", payload.getValue().title());
+        assertEquals("ACTIVE_MINUTES", payload.getValue().metric());
+        assertEquals(20, payload.getValue().targetValue());
     }
 
     @Test
-    @DisplayName("이미 활성 Quest가 있으면 폐기한다")
-    void 이미_활성_Quest가_있으면_폐기한다() {
-        when(questRepository.findActiveByUserId(any(), any()))
-                .thenReturn(Optional.of(mock(Quest.class)));
+    @DisplayName("같은 제안이 다시 배달되면 저장하지 않고 조용히 끝낸다")
+    void 재배달은_조용히_버린다() {
+        when(suggestionRepository.existsBySuggestionId(any())).thenReturn(true);
 
-        assertEquals(SuggestionOutcome.ALREADY_ACTIVE, service.accept(validCommand()));
-        verify(questRepository, never()).save(any());
-        verify(outboxRecorder, never()).append(any(), any(), any(), any(), any(), any());
+        assertEquals(SuggestionOutcome.DUPLICATE_SUGGESTION, service.store(validCommand()));
+
+        // 여기서 저장을 시도하면 기본키 제약에 걸려 예외가 되고,
+        // 그 예외는 컨슈머에서 무한 재시도가 되어 파티션을 멈춘다.
+        verify(suggestionRepository, never()).save(any());
+        verifyNoInteractions(outboxRecorder);
     }
 
     @Test
-    @DisplayName("metric이 3종 밖이면 폐기한다")
-    void metric이_3종_밖이면_폐기한다() {
-        assertEquals(SuggestionOutcome.UNKNOWN_METRIC, service.accept(command("HEART_RATE", 20)));
-        verify(questRepository, never()).save(any());
+    @DisplayName("metric이 세 종류 밖이면 저장하지 않는다 — 만들 수 없는 퀘스트를 카드로 띄우면 안 된다")
+    void metric이_세_종류_밖이면_버린다() {
+        assertEquals(SuggestionOutcome.UNKNOWN_METRIC, service.store(command("SLEEP_HOURS", 20)));
+
+        verify(suggestionRepository, never()).save(any());
+        verifyNoInteractions(outboxRecorder);
     }
 
     @Test
-    @DisplayName("targetValue가 0 이하면 폐기한다 — 즉시 완료로 공짜 XP가 나간다")
-    void targetValue가_0_이하면_폐기한다() {
-        assertEquals(SuggestionOutcome.INVALID_TARGET, service.accept(command("STEPS", 0)));
-        assertEquals(SuggestionOutcome.INVALID_TARGET, service.accept(command("STEPS", -1)));
-        verify(questRepository, never()).save(any());
+    @DisplayName("목표값이 0 이하면 저장하지 않는다 — 수락하자마자 완료되어 공짜 XP가 나간다")
+    void 목표값이_0_이하면_버린다() {
+        assertEquals(SuggestionOutcome.INVALID_TARGET, service.store(command("STEPS", 0)));
+
+        verify(suggestionRepository, never()).save(any());
+        verifyNoInteractions(outboxRecorder);
     }
 
     @Test
-    @DisplayName("저장된 스냅샷이 없으면 폐기한다")
-    void 스냅샷이_없으면_폐기한다() {
-        when(snapshotRepository.findByUserId(USER_ID)).thenReturn(Optional.empty());
+    @DisplayName("어떤 실패에서도 예외를 던지지 않는다 — 예외 하나가 그 파티션 전체를 멈춘다")
+    void 실패해도_예외를_던지지_않는다() {
+        // 이 경로는 카프카 컨슈머가 부른다.
+        // 예외가 컨슈머 밖으로 나가면 오프셋이 커밋되지 않고 같은 메시지를 2초마다 무한히 다시 처리한다.
+        // 아래 셋은 몇 번을 다시 해도 같은 결과라 그 파티션이 영원히 멈춘다.
+        // 같은 파티션에는 다른 유저의 이벤트도 함께 실려 있다.
+        when(suggestionRepository.existsBySuggestionId(any())).thenReturn(true);
+        assertDoesNotThrow(() -> service.store(validCommand()));
 
-        assertEquals(SuggestionOutcome.SNAPSHOT_MISSING, service.accept(validCommand()));
-        verify(questRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("basedOnMeasuredAt이 저장된 measuredAt과 다르면 폐기한다 — 짝 이벤트 대조 실패")
-    void measuredAt이_어긋나면_폐기한다() {
-        QuestSuggestionCommand mismatched = new QuestSuggestionCommand(
-                USER_ID, UUID.randomUUID(), DATE,
-                Instant.parse("2026-08-28T02:00:00Z"), "20분 산책하기", "ACTIVE_MINUTES", 20);
-
-        assertEquals(SuggestionOutcome.SNAPSHOT_MISMATCH, service.accept(mismatched));
-        verify(questRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("activityDate가 어긋나면 폐기한다 — 자정을 넘긴 제안")
-    void activityDate가_어긋나면_폐기한다() {
-        QuestSuggestionCommand nextDay = new QuestSuggestionCommand(
-                USER_ID, UUID.randomUUID(), LocalDate.of(2026, 8, 29),
-                BASED_ON, "20분 산책하기", "ACTIVE_MINUTES", 20);
-
-        assertEquals(SuggestionOutcome.DATE_MISMATCH, service.accept(nextDay));
-        verify(questRepository, never()).save(any());
+        when(suggestionRepository.existsBySuggestionId(any())).thenReturn(false);
+        assertDoesNotThrow(() -> service.store(command("SLEEP_HOURS", 20)));
+        assertDoesNotThrow(() -> service.store(command("STEPS", -1)));
     }
 }

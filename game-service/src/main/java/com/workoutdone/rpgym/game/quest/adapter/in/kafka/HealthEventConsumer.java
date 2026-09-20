@@ -51,7 +51,7 @@ public class HealthEventConsumer {
 
     // inbound(Driving) HEALTH_ACTIVITY_SYNCED, QUEST_SUGGESTED 트랜잭션을 시작하기 위한 어댑터
     // 순서대로 T1, T2로 명명
-    // T1은 컨슈머가 accept, T2는 컨슈머가 apply
+    // T1은 컨슈머가 apply, T2는 컨슈머가 store
     @KafkaListener(topics = "${rpgym.kafka.health-events-topic}")
     public void consume(String message) {
         HealthEventEnvelope envelope;
@@ -89,7 +89,7 @@ public class HealthEventConsumer {
     private void dispatch(HealthEventEnvelope envelope) {
         switch (envelope.eventType()) {
             case HEALTH_ACTIVITY_SYNCED -> applySnapshot(envelope);
-            case QUEST_SUGGESTED -> acceptSuggestion(envelope);
+            case QUEST_SUGGESTED -> storeSuggestion(envelope);
             // MVP 범위 밖. 소비는 하되 아무것도 하지 않는다 -- 안 받으면 offset이 안 밀린다.
             case DAILY_GOAL_COMPLETED -> log.debug("DAILY_GOAL_COMPLETED는 MVP 범위 밖이라 무시한다.");
             default -> log.error("알 수 없는 eventType={}", envelope.eventType());
@@ -120,7 +120,9 @@ public class HealthEventConsumer {
     }
 
     // T2 입구
-    private void acceptSuggestion(HealthEventEnvelope envelope) {
+    // 제안을 받아서 보관만 한다. 퀘스트는 여기서 만들지 않는다.
+    // 유저가 Slack 카드에서 수락을 눌렀을 때 HTTP 로 들어와서 만들어진다.
+    private void storeSuggestion(HealthEventEnvelope envelope) {
         QuestSuggestedData data = convert(envelope.data(), QuestSuggestedData.class);
         if (data == null) {
             return;
@@ -141,7 +143,7 @@ public class HealthEventConsumer {
             title= clampTitle(title);
         }
 
-        SuggestionOutcome outcome = questSuggestionService.accept(new QuestSuggestionCommand(
+        SuggestionOutcome outcome = questSuggestionService.store(new QuestSuggestionCommand(
                 envelope.userId(),
                 data.suggestionId(),
                 data.activityDate(),
