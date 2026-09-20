@@ -3,6 +3,7 @@ package com.workoutdone.rpgym.game.quest.application;
 import com.workoutdone.rpgym.game.outbox.application.OutboxRecorder;
 import com.workoutdone.rpgym.game.outbox.domain.AggregateType;
 import com.workoutdone.rpgym.game.outbox.domain.OutboxEventType;
+import com.workoutdone.rpgym.game.quest.application.payload.QuestCompletedData;
 import com.workoutdone.rpgym.game.quest.domain.Metric;
 import com.workoutdone.rpgym.game.quest.domain.aggregate.Quest;
 import com.workoutdone.rpgym.game.quest.domain.aggregate.UserLatestSnapshot;
@@ -16,6 +17,7 @@ import com.workoutdone.rpgym.game.xp.domain.SourceType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.time.Instant;
 import java.time.LocalDate;
