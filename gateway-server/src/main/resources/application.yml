@@ -1,17 +1,32 @@
 server:
   port: 19001
+  # 종료 신호를 받으면 기존 요청이 완료될 시간을 주고, 새로운 요청은 받지 않도록 하는 방식
+  shutdown: graceful
 
 spring:
   application:
     name: gateway-server
 
+  lifecycle:
+    # Graceful Shutdown 단계별 최대 대기 시간
+    timeout-per-shutdown-phase: 30s
+
   config:
     import: optional:file:.env[.properties]
+
+  reactor:
+    # Reactor Context의 context propagation을 활성화
+    context-propagation: auto
 
   cloud:
     gateway:
       server:
         webflux:
+          # Timeout 적용
+          httpclient:
+            connect-timeout: 3000
+            response-timeout: 5s
+
           routes:
             - id: user-service
               uri: lb://user-service
@@ -28,6 +43,11 @@ spring:
               predicates:
                 - Path=/api/v1/games/**
 
+            - id: notification-service
+              uri: lb://notification-service
+              predicates:
+                - Path=/api/v1/notifications/**
+
 eureka:
   client:
     # Eureka Server에 Gateway 자신을 등록
@@ -39,14 +59,27 @@ eureka:
 
     service-url:
       # Eureka Server 주소
-      defaultZone: ${EUREKA_SERVER_URL}
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:19000/eureka/}
 
 management:
+  server:
+    # actuator를 애플리케이션 포트(19001)와 분리 - 외부(nginx)에는 노출하지 않고
+    # 도커 내부망에서 Prometheus만 접근하도록 함
+    port: 19091
+
   endpoints:
     web:
       exposure:
-        # Gateway 상태 확인을 위한 Actuator Health Endpoint
-        include: health, info, prometheus
+        include: health, prometheus
+
+  tracing:
+    sampling:
+      # 로컬에서는 모든 요청을 trace 대상으로 잡음
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
 
 jwt:
   secret: ${JWT_SECRET}
