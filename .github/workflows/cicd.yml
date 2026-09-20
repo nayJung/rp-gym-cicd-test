@@ -44,6 +44,11 @@ jobs:
           # 변경된 파일을 비교하기 위해 전체 Git 히스토리를 가져옴
           fetch-depth: 0
 
+      # Docker Compose 설정 검증
+      # Gradle 모듈 변경 여부와 관계없이 Compose 문법 오류를 검사
+      - name: Validate Docker Compose
+        run: docker compose -f docker-compose-prod.yml config -q
+
       # Java 환경 설정
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -215,6 +220,7 @@ jobs:
             user-service/build/libs/user-service.jar
             health-service/build/libs/health-service.jar
             game-service/build/libs/game-service.jar
+            notification-service/build/libs/notification-service.jar
 
   # CD
   deploy:
@@ -286,6 +292,66 @@ jobs:
           echo "Target environment: ${TARGET}"
           echo "target=${TARGET}" >> "$GITHUB_OUTPUT"
 
+      # 배포에 필요한 인프라 설정 파일 전달
+      # service-url.inc는 deploy.sh가 현재 Blue/Green 상태를 관리하므로 전송하지 않음
+      # TO DO: Grafana alerting 설정은 별도 모니터링 작업에서 반영
+      - name: Upload Deployment Configuration
+        run: |
+          ssh \
+            -i ~/.ssh/ec2.pem \
+            ubuntu@${{ secrets.EC2_HOST }} \
+            "mkdir -p /home/ubuntu/rp-gym/nginx/docker-entrypoint.d \
+                      /home/ubuntu/rp-gym/monitoring/prometheus \
+                      /home/ubuntu/rp-gym/monitoring/loki \
+                      /home/ubuntu/rp-gym/monitoring/alloy \
+                      /home/ubuntu/rp-gym/monitoring/grafana/provisioning/datasources \
+                      /home/ubuntu/rp-gym/monitoring/grafana/provisioning/dashboards"
+
+          scp \
+            -i ~/.ssh/ec2.pem \
+            docker-compose-prod.yml \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/docker-compose-prod.yml
+
+          scp \
+            -i ~/.ssh/ec2.pem \
+            nginx/nginx.conf \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/nginx/nginx.conf
+
+          scp \
+            -i ~/.ssh/ec2.pem \
+            nginx/docker-entrypoint.d/40-zipkin-htpasswd.sh \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/nginx/docker-entrypoint.d/40-zipkin-htpasswd.sh
+
+          scp \
+            -i ~/.ssh/ec2.pem \
+            monitoring/prometheus/prometheus-prod.yml \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/monitoring/prometheus/prometheus-prod.yml
+
+          scp \
+            -i ~/.ssh/ec2.pem \
+            monitoring/loki/loki-config.yml \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/monitoring/loki/loki-config.yml
+
+          scp \
+            -i ~/.ssh/ec2.pem \
+            monitoring/alloy/config.alloy \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/monitoring/alloy/config.alloy
+
+          scp -r \
+            -i ~/.ssh/ec2.pem \
+            monitoring/grafana/provisioning/datasources \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/monitoring/grafana/provisioning/
+
+          scp -r \
+            -i ~/.ssh/ec2.pem \
+            monitoring/grafana/provisioning/dashboards \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/monitoring/grafana/provisioning/
+
+          ssh \
+            -i ~/.ssh/ec2.pem \
+            ubuntu@${{ secrets.EC2_HOST }} \
+            "chmod +x /home/ubuntu/rp-gym/nginx/docker-entrypoint.d/40-zipkin-htpasswd.sh"
+
       # 배포 대상 환경에 JAR 전달
       - name: Upload Application JARs
         run: |
@@ -298,7 +364,8 @@ jobs:
                       /home/ubuntu/rp-gym/deploy/${TARGET}/gateway \
                       /home/ubuntu/rp-gym/deploy/${TARGET}/user \
                       /home/ubuntu/rp-gym/deploy/${TARGET}/health \
-                      /home/ubuntu/rp-gym/deploy/${TARGET}/game"
+                      /home/ubuntu/rp-gym/deploy/${TARGET}/game \
+                      /home/ubuntu/rp-gym/deploy/${TARGET}/notification"
 
           scp \
             -i ~/.ssh/ec2.pem \
@@ -324,6 +391,11 @@ jobs:
             -i ~/.ssh/ec2.pem \
             artifacts/game-service/build/libs/game-service.jar \
             ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/deploy/${TARGET}/game/app.jar
+          
+          scp \
+            -i ~/.ssh/ec2.pem \
+            artifacts/notification-service/build/libs/notification-service.jar \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/deploy/${TARGET}/notification/app.jar
 
       # deploy.sh 전달
       - name: Upload deploy script
