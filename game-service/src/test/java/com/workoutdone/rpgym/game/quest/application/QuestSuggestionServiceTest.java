@@ -3,7 +3,7 @@ package com.workoutdone.rpgym.game.quest.application;
 import com.workoutdone.rpgym.game.outbox.application.OutboxRecorder;
 import com.workoutdone.rpgym.game.outbox.domain.AggregateType;
 import com.workoutdone.rpgym.game.outbox.domain.OutboxEventType;
-import com.workoutdone.rpgym.game.quest.application.payload.QuestSuggestedData;
+import com.workoutdone.rpgym.game.quest.application.payload.QuestToNotification;
 import com.workoutdone.rpgym.game.quest.domain.Metric;
 import com.workoutdone.rpgym.game.quest.domain.SuggestionStatus;
 import com.workoutdone.rpgym.game.quest.domain.aggregate.QuestSuggestion;
@@ -98,7 +98,7 @@ class QuestSuggestionServiceTest {
     @Test
     @DisplayName("저장되면 알림용 이벤트가 아웃박스에 적재된다")
     void 저장되면_아웃박스에_적재된다() {
-        ArgumentCaptor<QuestSuggestedData> payload = ArgumentCaptor.forClass(QuestSuggestedData.class);
+        ArgumentCaptor<QuestToNotification> payload = ArgumentCaptor.forClass(QuestToNotification.class);
         QuestSuggestionCommand command = validCommand();
 
         service.store(command);

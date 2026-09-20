@@ -3,7 +3,7 @@ package com.workoutdone.rpgym.game.quest.application;
 import com.workoutdone.rpgym.game.outbox.application.OutboxRecorder;
 import com.workoutdone.rpgym.game.outbox.domain.AggregateType;
 import com.workoutdone.rpgym.game.outbox.domain.OutboxEventType;
-import com.workoutdone.rpgym.game.quest.application.payload.QuestSuggestedData;
+import com.workoutdone.rpgym.game.quest.application.payload.QuestToNotification;
 import com.workoutdone.rpgym.game.quest.domain.Metric;
 import com.workoutdone.rpgym.game.quest.domain.aggregate.QuestSuggestion;
 import com.workoutdone.rpgym.game.quest.domain.repo.QuestSuggestionRepository;
@@ -96,7 +96,7 @@ public class QuestSuggestionService {
                 // 이벤트가 일어난 시각으로 발행 시각이 아니라 판정 기준 시각을 쓴다.
                 // 재발행해도 값이 바뀌지 않아야 소비하는 쪽이 이 값으로 중복을 판단해도 안전하다.
                 suggestion.getBasedOnMeasuredAt(),
-                QuestSuggestedData.from(suggestion)
+                QuestToNotification.from(suggestion)
         );
 
         log.info("quest suggestion stored: suggestionId={} userId={} metric={} target={} expiresAt={}",
