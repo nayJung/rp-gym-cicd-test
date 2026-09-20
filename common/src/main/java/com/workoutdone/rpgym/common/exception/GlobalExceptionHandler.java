@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -176,6 +177,26 @@ public class GlobalExceptionHandler {
         );
 
         return createResponse(CommonErrorCode.RESOURCE_NOT_FOUND);
+    }
+
+    /**
+     * 낙관적 락(@Version) 충돌 처리
+     *
+     * 같은 row를 동시에 수정하는 두 트랜잭션 중 나중에 커밋을 시도하는 쪽에서 발생한다.
+     * 먼저 커밋된 변경을 조용히 덮어쓰지 않도록 여기서 막고, 클라이언트가 최신 상태를 다시 읽고
+     * 재시도하도록 409로 응답한다.
+     */
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ErrorResponse> handleObjectOptimisticLockingFailureException(
+            ObjectOptimisticLockingFailureException exception
+    ) {
+        log.warn(
+                "Optimistic locking conflict: entity={}, id={}",
+                exception.getPersistentClassName(),
+                exception.getIdentifier()
+        );
+
+        return createResponse(CommonErrorCode.CONFLICT);
     }
 
     /**

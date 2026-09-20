@@ -38,6 +38,7 @@ TARGET_SERVICES=(
     "user-service-${TARGET}"
     "health-service-${TARGET}"
     "game-service-${TARGET}"
+    "notification-service-${TARGET}"
 )
 
 BEFORE_SERVICES=(
@@ -46,6 +47,7 @@ BEFORE_SERVICES=(
     "user-service-${BEFORE}"
     "health-service-${BEFORE}"
     "game-service-${BEFORE}"
+    "notification-service-${BEFORE}"
 )
 
 echo "Start Shared Infrastructure"
@@ -59,7 +61,8 @@ docker compose -f "${COMPOSE_FILE}" up -d \
     prometheus \
     grafana \
     loki \
-    alloy
+    alloy \
+    zipkin
 
 echo "Build & Start ${TARGET}"
 
@@ -120,10 +123,11 @@ check_health() {
 echo "Health Check"
 
 check_health "eureka-server-${TARGET}" "rp-gym-eureka-${TARGET}" 19000
-check_health "gateway-${TARGET}" "rp-gym-gateway-${TARGET}" 19001
+check_health "gateway-${TARGET}" "rp-gym-gateway-${TARGET}" 19091
 check_health "user-service-${TARGET}" "rp-gym-user-${TARGET}" 19010
 check_health "health-service-${TARGET}" "rp-gym-health-${TARGET}" 19011
 check_health "game-service-${TARGET}" "rp-gym-game-${TARGET}" 19012
+check_health "notification-service-${TARGET}" "rp-gym-notification-${TARGET}" 19013
 
 echo "Start Nginx"
 
@@ -136,6 +140,52 @@ upstream gateway {
     server gateway-${TARGET}:19001;
 }
 EOF
+
+if docker ps --format '{{.Names}}' | grep -q "^rp-gym-nginx$"; then
+    echo "Testing Nginx configuration"
+
+    if ! docker exec rp-gym-nginx nginx -t; then
+        echo "Nginx configuration test failed."
+
+        cat > "${NGINX_CONF}" <<EOF
+upstream gateway {
+    server gateway-${BEFORE}:19001;
+}
+EOF
+
+        exit 1
+    fi
+
+    echo "Reload Nginx"
+
+    if ! docker exec rp-gym-nginx nginx -s reload; then
+        echo "Nginx reload failed."
+        echo "Restoring previous environment: gateway-${BEFORE}"
+
+        cat > "${NGINX_CONF}" <<EOF
+upstream gateway {
+    server gateway-${BEFORE}:19001;
+}
+EOF
+
+        if docker exec rp-gym-nginx nginx -t; then
+            docker exec rp-gym-nginx nginx -s reload
+            echo "Nginx rollback success."
+        else
+            echo "Nginx rollback configuration test failed."
+        fi
+
+        exit 1
+    fi
+
+    echo "Nginx switched to gateway-${TARGET}"
+else
+    echo "Start Nginx"
+
+    docker compose -f "${COMPOSE_FILE}" up -d nginx
+
+    echo "Nginx started with gateway-${TARGET}"
+fi
 
 echo "Testing Nginx configuration"
 

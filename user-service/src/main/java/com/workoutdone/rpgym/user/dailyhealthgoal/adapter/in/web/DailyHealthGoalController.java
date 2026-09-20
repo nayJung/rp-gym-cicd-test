@@ -1,18 +1,19 @@
 package com.workoutdone.rpgym.user.dailyhealthgoal.adapter.in.web;
 
 import com.workoutdone.rpgym.common.constant.HeaderConstants;
-import com.workoutdone.rpgym.common.exception.BaseException;
-import com.workoutdone.rpgym.common.exception.CommonErrorCode;
 import com.workoutdone.rpgym.common.security.RequireRole;
 import com.workoutdone.rpgym.common.security.UserRole;
 import com.workoutdone.rpgym.user.dailyhealthgoal.adapter.in.web.dto.ReqRegisterDailyHealthGoalDto;
 import com.workoutdone.rpgym.user.dailyhealthgoal.adapter.in.web.dto.ResDailyHealthGoalDto;
+import com.workoutdone.rpgym.user.dailyhealthgoal.application.GetDailyHealthGoalResult;
+import com.workoutdone.rpgym.user.dailyhealthgoal.application.GetDailyHealthGoalService;
 import com.workoutdone.rpgym.user.dailyhealthgoal.application.RegisterDailyHealthGoalResult;
 import com.workoutdone.rpgym.user.dailyhealthgoal.application.RegisterDailyHealthGoalService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -27,16 +28,16 @@ import java.util.UUID;
 public class DailyHealthGoalController {
 
     private final RegisterDailyHealthGoalService registerDailyHealthGoalService;
+    private final GetDailyHealthGoalService getDailyHealthGoalService;
 
     // 본인 명의로만 등록 가능하므로 USER role만 허용 (ADMIN 제외)
     // X-User-Role 검증은 RoleAuthorizationInterceptor가 처리
     @RequireRole(UserRole.USER)
     @PostMapping("/me")
     public ResponseEntity<ResDailyHealthGoalDto> registerDailyHealthGoal(
-            @RequestHeader(value = HeaderConstants.USER_ID, required = false) String userIdHeader,
+            @RequestHeader(HeaderConstants.USER_ID) UUID userId,
             @Valid @RequestBody ReqRegisterDailyHealthGoalDto request
     ) {
-        UUID userId = resolveUserId(userIdHeader);
         RegisterDailyHealthGoalResult result = registerDailyHealthGoalService.registerDailyHealthGoal(request.toCommand(userId));
 
         return ResponseEntity
@@ -44,17 +45,17 @@ public class DailyHealthGoalController {
                 .body(ResDailyHealthGoalDto.from(result));
     }
 
-    ////TO-DO: 게이트웨이에서 JWT 유효성 및 요청헤더 유효성 검증 로직 추가되면 해당 메서드는 삭제 예정
-    // 게이트웨이를 거치지 않아 X-User-Id가 없거나 UUID 형식이 아니면 인증 안 된 요청으로 취급
-    private UUID resolveUserId(String userIdHeader) {
-        if (userIdHeader == null || userIdHeader.isBlank()) {
-            throw new BaseException(CommonErrorCode.UNAUTHORIZED);
-        }
+    // 본인 명의의 목표만 조회 가능하므로 USER role만 허용 (ADMIN 제외)
+    // X-User-Role 검증은 RoleAuthorizationInterceptor가 처리
+    @RequireRole(UserRole.USER)
+    @GetMapping("/me")
+    public ResponseEntity<ResDailyHealthGoalDto> getDailyHealthGoal(
+            @RequestHeader(HeaderConstants.USER_ID) UUID userId
+    ) {
+        GetDailyHealthGoalResult result = getDailyHealthGoalService.getDailyHealthGoal(userId);
 
-        try {
-            return UUID.fromString(userIdHeader);
-        } catch (IllegalArgumentException e) {
-            throw new BaseException(CommonErrorCode.UNAUTHORIZED);
-        }
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(ResDailyHealthGoalDto.from(result));
     }
 }

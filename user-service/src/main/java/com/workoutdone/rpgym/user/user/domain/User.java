@@ -7,12 +7,13 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.UuidGenerator;
 
 import java.util.UUID;
 
@@ -23,7 +24,8 @@ import java.util.UUID;
 public class User extends BaseCreatedUpdatedDeletedEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @GeneratedValue
+    @UuidGenerator(style = UuidGenerator.Style.TIME)
     private UUID id;
 
     @Column(nullable = false, length = 255, updatable = false)
@@ -45,6 +47,11 @@ public class User extends BaseCreatedUpdatedDeletedEntity {
 
     @Column(name = "slack_id", nullable = false, length = 100)
     private String slackId;
+
+    // 낙관적 락
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     private User(String email, String password, String nickname, String slackId) {
         this.email = email;
@@ -83,5 +90,11 @@ public class User extends BaseCreatedUpdatedDeletedEntity {
     // 다른 서비스(Health/Game 등)에 사용자 상태를 노출할 때 이 값을 사용
     public UserStatus getDisplayStatus() {
         return getDeletedAt() != null ? UserStatus.WITHDRAWN : status;
+    }
+
+    // 회원 탈퇴 시, Soft Delete(deletedAt)와 status 컬럼을 함께 갱신
+    public void withdraw() {
+        delete();
+        this.status = UserStatus.WITHDRAWN;
     }
 }

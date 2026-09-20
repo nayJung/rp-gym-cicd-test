@@ -7,6 +7,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
+import org.hibernate.annotations.Generated;
+import org.hibernate.generator.EventType;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -33,8 +35,14 @@ import java.util.UUID;
                 @UniqueConstraint(name = "uk_health_activity_outbox_event_id",
                         columnNames = "event_id")
         },
-        indexes = @Index(name = "idx_health_activity_outbox_status",
-                columnList = "status, created_at")
+        indexes = {
+                // 발행 폴링용 — PENDING을 seq 순서로 조회
+                @Index(name = "idx_health_activity_outbox_status",
+                        columnList = "status, seq"),
+                // 정리 배치용 — PUBLISHED를 published_at 기준으로 조회
+                @Index(name = "idx_health_activity_outbox_cleanup",
+                        columnList = "status, published_at")
+        }
 )
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class EventOutbox extends BaseCreatedEntity {
@@ -89,6 +97,15 @@ public class EventOutbox extends BaseCreatedEntity {
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
+
+    /**
+     * 발행 순서 결정용 단조 증가 시퀀스.
+     * DB가 IDENTITY로 채우므로 애플리케이션에서 직접 대입하지 않는다.
+     * created_at은 같은 트랜잭션의 행들이 동일한 값을 가지므로 정렬 키로 쓸 수 없다.
+     */
+    @Generated(event = EventType.INSERT)
+    @Column(name = "seq", insertable = false, updatable = false)
+    private Long seq;
 
     private EventOutbox(UUID outboxId, UUID eventId, HealthEventType eventType,
                         UUID sourceActivityId, String dedupKey,

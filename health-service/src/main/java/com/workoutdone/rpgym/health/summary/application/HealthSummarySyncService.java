@@ -22,6 +22,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.time.Duration;
 
 @Slf4j
 @Service
@@ -40,6 +41,7 @@ public class HealthSummarySyncService {
     private static final List<MetricType> METRIC_PRIORITY = List.of(
             MetricType.STEPS, MetricType.ACTIVE_MINUTES, MetricType.ACTIVE_CALORIES
     );
+    private static final Duration QUEST_SUGGESTION_INTERVAL = Duration.ofMinutes(30);
 
     @Transactional
     public void sync(SyncedActivity syncedActivity) {
@@ -93,9 +95,10 @@ public class HealthSummarySyncService {
 
     private void publishDeficientGoalEventIfNeeded(DailyHealthSummary summary, UUID activityId,
                                                    List<DailyGoalProgress> progresses, Instant now) {
-        if (!summary.markQuestSuggested(now)) {
+        if (!summary.isQuestSuggestionDue(now, QUEST_SUGGESTION_INTERVAL)) {
             return;
         }
+        summary.recordQuestSuggested(now);
         summaryRepository.save(summary);
 
         Optional<DailyGoalProgress> mostDeficient = progresses.stream()

@@ -4,12 +4,13 @@ import com.workoutdone.rpgym.common.entity.BaseCreatedUpdatedDeletedEntity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.UuidGenerator;
 
 import java.util.UUID;
 
@@ -24,7 +25,8 @@ public class DailyHealthGoal extends BaseCreatedUpdatedDeletedEntity {
     public static final int DEFAULT_ACTIVE_CALORIES_GOAL = 300;
 
     @Id
-    @GeneratedValue(strategy = GenerationType.UUID)
+    @GeneratedValue
+    @UuidGenerator(style = UuidGenerator.Style.TIME)
     private UUID id;
 
     @Column(name = "user_id", nullable = false, updatable = false)
@@ -38,6 +40,11 @@ public class DailyHealthGoal extends BaseCreatedUpdatedDeletedEntity {
 
     @Column(name = "active_calories_goal", nullable = false)
     private Integer activeCaloriesGoal;
+
+    // 낙관적 락
+    @Version
+    @Column(name = "version", nullable = false)
+    private Long version;
 
     private DailyHealthGoal(UUID userId, Integer stepGoal, Integer activeMinutesGoal, Integer activeCaloriesGoal) {
         this.userId = userId;

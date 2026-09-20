@@ -6,6 +6,7 @@ import com.workoutdone.rpgym.health.outbox.domain.EventOutboxRepository;
 import com.workoutdone.rpgym.health.outbox.domain.HealthEventType;
 import com.workoutdone.rpgym.health.outbox.domain.OutboxStatus;
 import com.workoutdone.rpgym.health.outbox.exception.EventPublishException;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,18 +45,39 @@ class OutboxRelayTest {
 
     private OutboxRelay outboxRelay;
 
+    /**
+     * 지표는 목이 아니라 실제 객체를 쓴다.
+     * 발행 경로에서 지표를 기록하는 코드까지 실제로 실행되므로,
+     * 태그 조합이나 Duration 계산이 깨지면 이 테스트에서 드러난다.
+     */
+    private SimpleMeterRegistry meterRegistry;
+
     @BeforeEach
     void setUp() {
         // 순서: pollSize, maxRetry, sendTimeout, topic, dlqSuffix
         OutboxPublishProperties properties = new OutboxPublishProperties(
                 100, MAX_RETRY, Duration.ofSeconds(5), TOPIC, ".dlq");
 
-        outboxRelay = new OutboxRelay(eventOutboxRepository, eventPublisherPort, properties);
+        meterRegistry = new SimpleMeterRegistry();
+
+        outboxRelay = new OutboxRelay(
+                eventOutboxRepository,
+                eventPublisherPort,
+                properties,
+                new OutboxMetrics(meterRegistry));
+    }
+
+    /** event_type + result 조합의 발행 카운터 값 */
+    private double publishCount(String result) {
+        return meterRegistry.get("rpgym.outbox.publish")
+                .tags("event_type", HealthEventType.HEALTH_ACTIVITY_SYNCED.name(), "result", result)
+                .counter()
+                .count();
     }
 
     @Test
     @DisplayName("발행에 성공하면 PUBLISHED로 전이하고 payload 원문을 그대로 보낸다")
-    void 발행_성공() {
+    void marksPublishedOnSuccess() {
         // given
         EventOutbox outbox = pendingOutbox();
         given(eventOutboxRepository.findPendingForUpdate(anyInt())).willReturn(List.of(outbox));
@@ -77,11 +99,13 @@ class OutboxRelayTest {
 
         // 발행 시점에 JSON을 재구성하면 eventId가 바뀐다. 저장된 문자열 그대로여야 한다.
         assertThat(payloadCaptor.getValue()).isSameAs(outbox.getPayload());
+
+        assertThat(publishCount("success")).isEqualTo(1.0);
     }
 
     @Test
     @DisplayName("발행에 실패하고 재시도 여유가 있으면 PENDING을 유지하고 retryCount만 늘린다")
-    void 발행_실패_재시도() {
+    void keepsPendingWhenRetryBudgetRemains() {
         // given
         EventOutbox outbox = pendingOutbox();
         given(eventOutboxRepository.findPendingForUpdate(anyInt())).willReturn(List.of(outbox));
@@ -97,11 +121,13 @@ class OutboxRelayTest {
         then(eventPublisherPort).should(never()).publishToDlq(
                 anyString(), anyString(), anyString(),
                 any(HealthEventType.class), anyInt(), anyString());
+
+        assertThat(publishCount("failure")).isEqualTo(1.0);
     }
 
     @Test
     @DisplayName("최대 재시도에 도달하면 DLQ로 보내고 FAILED로 종료한다")
-    void 최대_재시도_초과시_DLQ() {
+    void movesToDlqWhenRetryExhausted() {
         // given — 이미 MAX_RETRY - 1회 실패한 상태
         EventOutbox outbox = pendingOutbox();
         failBefore(outbox, MAX_RETRY - 1);
@@ -124,7 +150,7 @@ class OutboxRelayTest {
 
     @Test
     @DisplayName("DLQ 발행까지 실패하면 PENDING으로 되돌려 다음 폴링에서 재시도한다")
-    void DLQ_발행_실패() {
+    void revertsToPendingWhenDlqFails() {
         // given
         EventOutbox outbox = pendingOutbox();
         failBefore(outbox, MAX_RETRY - 1);
@@ -144,7 +170,7 @@ class OutboxRelayTest {
 
     @Test
     @DisplayName("한 건이 실패하면 같은 라운드의 뒤 이벤트는 발행하지 않는다")
-    void 실패시_라운드_중단() {
+    void stopsRoundOnFirstFailure() {
         // given
         EventOutbox first = pendingOutbox();
         EventOutbox second = pendingOutbox();

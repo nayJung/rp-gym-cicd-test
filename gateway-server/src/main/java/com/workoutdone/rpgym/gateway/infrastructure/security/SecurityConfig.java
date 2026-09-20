@@ -40,11 +40,15 @@ public class SecurityConfig {
                 // 보안 정책 설정
                 .authorizeExchange(exchange -> exchange
                         // 인증 없이 접근 가능한 API
+                        // actuator는 management 포트(19091)로 분리했지만 이 SecurityWebFilterChain이
+                        // 포트 구분 없이 그대로 적용되는 걸 확인해서 유지함.
+                        // 실제 보호는 인증이 아니라 네트워크 격리(19091은 expose만 있고 외부/nginx에서 접근 불가)로 이뤄짐
                         .pathMatchers(
                                 "/api/v1/users/login",
                                 "/api/v1/users/signup",
                                 "/api/v1/users/refresh",
-                                "/actuator/**"
+                                "/actuator/health",
+                                "/actuator/prometheus"
                         ).permitAll()
 
                         .pathMatchers(
