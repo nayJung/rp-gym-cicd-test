@@ -90,6 +90,26 @@ class QuestProgressServiceTest {
     }
 
     @Test
+    @DisplayName("완료 이벤트에 퀘스트 제목이 실린다 — 알림 쪽이 이것만으로 카드를 그릴 수 있어야 한다")
+    void 완료_이벤트에_제목이_실린다() {
+        ArgumentCaptor<QuestCompletedData> payload = ArgumentCaptor.forClass(QuestCompletedData.class);
+
+        service.apply(USER_ID, snapshot("2026-08-28T09:30:00Z", 53));
+
+        verify(outboxRecorder).append(any(), any(), any(), any(), any(), payload.capture());
+        QuestCompletedData data = payload.getValue();
+        // 제목이 없으면 카드에 클라이언트가 읽을 내용이 하나도 남지 않는다. 퀘스트 식별자는 UUID다.
+        assertEquals("20분 산책하기", data.title());
+        assertEquals(quest.getQuestId(), data.questId());
+        assertEquals("ACTIVE_MINUTES", data.metric());
+        assertEquals(TARGET, data.targetValue());
+        assertEquals(BASELINE, data.baselineValue());
+        assertEquals(53 - BASELINE, data.achievedDelta());
+        assertEquals(REWARD_XP, data.rewardXp());
+        assertEquals(COMPLETED_AT, data.completedByMeasuredAt());
+    }
+
+    @Test
     @DisplayName("진행만 되면 XP도 발행도 없다")
     void 진행만_되면_지급도_발행도_없다() {
         Optional<ApplyResult> result = service.apply(USER_ID, snapshot("2026-08-28T05:00:00Z", 40));
