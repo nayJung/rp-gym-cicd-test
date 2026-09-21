@@ -261,6 +261,40 @@ jobs:
 
           ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
 
+      # GitHub Secrets로 EC2 .env 생성
+      - name: Create EC2 environment file
+        shell: bash
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ZIPKIN_UI_USER: ${{ secrets.ZIPKIN_UI_USER }}
+          ZIPKIN_UI_PASSWORD_HASH: ${{ secrets.ZIPKIN_UI_PASSWORD_HASH }}
+          GRAFANA_ROOT_URL: ${{ secrets.GRAFANA_ROOT_URL }}
+        run: |
+          ENV_FILE="$(mktemp)"
+
+          trap 'rm -f "$ENV_FILE"' EXIT
+
+          {
+            printf 'JWT_SECRET=%s\n' "$JWT_SECRET"
+            printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
+            printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY"
+            printf 'ZIPKIN_UI_USER=%s\n' "$ZIPKIN_UI_USER"
+            printf "ZIPKIN_UI_PASSWORD_HASH='%s'\n" "$ZIPKIN_UI_PASSWORD_HASH"
+            printf 'GRAFANA_ROOT_URL=%s\n' "$GRAFANA_ROOT_URL"
+          } > "$ENV_FILE"
+
+          scp \
+            -i ~/.ssh/ec2.pem \
+            "$ENV_FILE" \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/.env
+
+          ssh \
+            -i ~/.ssh/ec2.pem \
+            ubuntu@${{ secrets.EC2_HOST }} \
+            "chmod 600 /home/ubuntu/rp-gym/.env"
+
       # EC2 연결 확인
       - name: Check EC2 connection
         run: |
