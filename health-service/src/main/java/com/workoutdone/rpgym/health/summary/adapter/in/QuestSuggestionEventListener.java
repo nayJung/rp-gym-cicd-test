@@ -27,7 +27,7 @@ import java.util.UUID;
  * summary.questSuggestedAt은 이미 갱신됐지만 QUEST_SUGGESTED 이벤트는
  * 유실될 수 있다. 이 경우 해당 사용자는 다음 30분 주기까지 제안을
  * 받지 못한다. #97로 제안 정책이 "30분마다 반복"으로 바뀌었기 때문에
- * 이 정도 유실 위험은 감수할 수 있다고 판단했다 (진혜림 리뷰, PR #113).
+ * 이 정도 유실 위험은 감수할 수 있다고 판단했다 (PR #116 리뷰 논의).
  */
 @Slf4j
 @Component
@@ -63,7 +63,7 @@ public class QuestSuggestionEventListener {
         }
 
         // eventId: outbox/Kafka 계층의 멱등 처리용 식별자
-         // suggestionId: 도메인 상 Quest 제안 자체의 식별자 (Game Service가 이 값으로 Quest를 식별)
+        // suggestionId: 도메인 상 Quest 제안 자체의 식별자 (Game Service가 이 값으로 Quest를 식별)
         UUID eventId = UUID.randomUUID();
         UUID suggestionId = UUID.randomUUID();
         String dedupKey = "QUEST_SUGGESTED:%s:%s".formatted(event.userId(), event.measuredAt());
