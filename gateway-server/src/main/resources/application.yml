@@ -56,6 +56,11 @@ eureka:
       defaultZone: ${EUREKA_SERVER_URL:http://localhost:19000/eureka/}
 
 management:
+  server:
+    # actuator를 애플리케이션 포트(19001)와 분리 - 외부(nginx)에는 노출하지 않고
+    # 도커 내부망에서 Prometheus만 접근하도록 함
+    port: 19091
+
   endpoints:
     web:
       exposure:
