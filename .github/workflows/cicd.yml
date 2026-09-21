@@ -221,6 +221,7 @@ jobs:
             health-service/build/libs/health-service.jar
             game-service/build/libs/game-service.jar
             notification-service/build/libs/notification-service.jar
+          retention-days: 7
 
   # CD
   deploy:
