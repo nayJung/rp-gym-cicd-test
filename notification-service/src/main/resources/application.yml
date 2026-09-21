@@ -49,6 +49,14 @@ spring:
     template:
       observation-enabled: true #분산 추적(트레이싱) 연결용
 
+feign:
+  client:
+    config:
+      user-service:
+        # slackId 조회가 이 시간 안에 안 끝나면 실패로 보고 예외를 던진다 (Kafka가 메시지 전체를 재시도한다).
+        connect-timeout: 1000
+        read-timeout: 2000
+
 eureka:
   instance:
     hostname: ${EUREKA_INSTANCE_HOSTNAME:localhost}
