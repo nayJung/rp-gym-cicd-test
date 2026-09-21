@@ -8,6 +8,7 @@ NGINX_CONF="${PROJECT_PATH}/nginx/service-url.inc"
 DRAIN_SECONDS=10
 NGINX_READY_RETRIES=15
 NGINX_READY_INTERVAL=2
+TARGET_HEALTH_STABLE_CHECKS=3
 
 cd "${PROJECT_PATH}"
 
@@ -100,7 +101,7 @@ else
     echo "No previous environment detected. Treating as initial deployment."
 fi
 
-# Rollback
+# 롤백
 rollback() {
     echo "Rollback Start"
 
@@ -145,7 +146,21 @@ EOF
             fi
         fi
 
-        echo "Nginx rollback success."
+                echo "Nginx rollback configuration restored."
+
+                # 이전 Gateway가 실제로 정상인지 확인
+                if ! wait_for_previous_gateway; then
+                    echo "Previous Gateway verification failed."
+                    return 1
+                fi
+
+                # Nginx를 통해 이전 환경으로 실제 요청이 전달되는지 확인
+                if ! wait_for_nginx_traffic; then
+                    echo "Nginx rollback traffic verification failed."
+                    return 1
+                fi
+
+                echo "Nginx rollback success."
 
     # 이전 환경이 없는 최초 배포인 경우
     else
@@ -175,10 +190,11 @@ EOF
     return 0
 }
 
-# Target Gateway Health Check
+# 신규 Gateway 상태 확인
 wait_for_target_gateway() {
     local CONTAINER="rp-gym-gateway-${TARGET}"
     local HTTP_CODE
+    local SUCCESS_COUNT=0
 
     echo "Waiting for gateway-${TARGET} health..."
 
@@ -189,14 +205,22 @@ wait_for_target_gateway() {
             -s \
             -o /dev/null \
             -w "%{http_code}" \
-            http://localhost:19091/actuator/health || true)
+            http://localhost:19091/actuator/health 2>/dev/null || true)
 
         if [ "${HTTP_CODE}" = "200" ]; then
-            echo "Target Gateway health is UP."
-            return 0
-        fi
+            SUCCESS_COUNT=$((SUCCESS_COUNT + 1))
 
-        echo "Target Gateway health is not ready: ${HTTP_CODE:-000} (attempt ${i}/${NGINX_READY_RETRIES})"
+            echo "Target Gateway health is UP. (${SUCCESS_COUNT}/${TARGET_HEALTH_STABLE_CHECKS})"
+
+            if [ "${SUCCESS_COUNT}" -ge "${TARGET_HEALTH_STABLE_CHECKS}" ]; then
+                echo "Target Gateway health is stable."
+                return 0
+            fi
+        else
+            SUCCESS_COUNT=0
+
+            echo "Target Gateway health is not ready: ${HTTP_CODE:-000} (attempt ${i}/${NGINX_READY_RETRIES})"
+        fi
 
         sleep "${NGINX_READY_INTERVAL}"
     done
@@ -205,7 +229,37 @@ wait_for_target_gateway() {
     return 1
 }
 
-# Nginx Traffic Check
+# 이전 Gateway 상태 확인
+wait_for_previous_gateway() {
+    local CONTAINER="rp-gym-gateway-${BEFORE}"
+    local HTTP_CODE
+
+    echo "Waiting for gateway-${BEFORE} health..."
+
+    for ((i=1; i<=NGINX_READY_RETRIES; i++)); do
+
+        HTTP_CODE=$(docker exec "${CONTAINER}" curl \
+            --max-time 2 \
+            -s \
+            -o /dev/null \
+            -w "%{http_code}" \
+            http://localhost:19091/actuator/health 2>/dev/null || true)
+
+        if [ "${HTTP_CODE}" = "200" ]; then
+            echo "Previous Gateway health is UP."
+            return 0
+        fi
+
+        echo "Previous Gateway health is not ready: ${HTTP_CODE:-000} (attempt ${i}/${NGINX_READY_RETRIES})"
+
+        sleep "${NGINX_READY_INTERVAL}"
+    done
+
+    echo "Previous Gateway health check failed."
+    return 1
+}
+
+# Nginx 트래픽 확인
 wait_for_nginx_traffic() {
     local HTTP_CODE
 
@@ -234,7 +288,7 @@ wait_for_nginx_traffic() {
     return 1
 }
 
-# Shared Infrastructure
+# 공용 인프라 실행
 echo "Start Shared Infrastructure"
 
 docker compose -f "${COMPOSE_FILE}" up -d \
@@ -250,7 +304,7 @@ docker compose -f "${COMPOSE_FILE}" up -d \
     alloy \
     zipkin
 
-# Target Environment Start
+# 신규 환경 실행
 echo "Build & Start ${TARGET}"
 
 if ! docker compose -f "${COMPOSE_FILE}" up -d \
@@ -277,7 +331,7 @@ fi
 
 echo "Target environment is healthy."
 
-# Nginx Target Switch
+# Nginx 대상 환경 전환
 echo "Switch Nginx to gateway-${TARGET}"
 
 cat > "${NGINX_CONF}" <<EOF
@@ -323,11 +377,9 @@ else
     if ! docker exec rp-gym-nginx nginx -t; then
         echo "Nginx configuration test failed."
 
-        cat > "${NGINX_CONF}" <<EOF
-upstream gateway {
-    server gateway-${BEFORE}:19001;
-}
-EOF
+        if ! rollback; then
+            echo "CRITICAL: Automatic rollback failed."
+        fi
 
         exit 1
     fi
@@ -347,7 +399,7 @@ EOF
     echo "Nginx switched to gateway-${TARGET}"
 fi
 
-# Target Gateway Health Verification
+# 신규 Gateway 상태 검증
 echo "Verify target Gateway"
 
 if ! wait_for_target_gateway; then
@@ -360,7 +412,7 @@ if ! wait_for_target_gateway; then
     exit 1
 fi
 
-# Nginx Traffic Verification
+# Nginx 트래픽 검증
 echo "Verify Nginx traffic"
 
 if ! wait_for_nginx_traffic; then
@@ -375,7 +427,7 @@ fi
 
 echo "Target environment verification successful."
 
-# Connection Draining
+# 기존 연결 종료 대기
 if [ "${HAS_BEFORE_ENV}" = true ]; then
     echo "Connection Draining: ${DRAIN_SECONDS}s"
     sleep "${DRAIN_SECONDS}"
