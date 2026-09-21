@@ -66,21 +66,62 @@ BEFORE_SERVICES=(
     "notification-service-${BEFORE}"
 )
 
-rollback() {
-    echo "Restoring previous environment: gateway-${BEFORE}"
+# 이전 환경이 실제로 실행 중인지 확인
+if docker inspect -f '{{.State.Running}}' "rp-gym-gateway-${BEFORE}" 2>/dev/null | grep -q '^true$'; then
+    HAS_BEFORE_ENV=true
+else
+    HAS_BEFORE_ENV=false
+fi
 
-    cat > "${NGINX_CONF}" <<EOF
+# 배포 시작 시점에 Nginx가 실행 중이었는지 확인
+if docker inspect -f '{{.State.Running}}' rp-gym-nginx 2>/dev/null | grep -q '^true$'; then
+    NGINX_WAS_RUNNING=true
+else
+    NGINX_WAS_RUNNING=false
+fi
+
+if [ "${HAS_BEFORE_ENV}" = true ]; then
+    echo "Previous environment detected: gateway-${BEFORE}"
+else
+    echo "No previous environment detected. Treating as initial deployment."
+fi
+
+rollback() {
+    echo "Rollback Start"
+
+    if [ "${HAS_BEFORE_ENV}" = true ]; then
+        echo "Restoring previous environment: gateway-${BEFORE}"
+
+        cat > "${NGINX_CONF}" <<EOF
 upstream gateway {
     server gateway-${BEFORE}:19001;
 }
 EOF
 
-    if docker exec rp-gym-nginx nginx -t; then
-        docker exec rp-gym-nginx nginx -s reload
-        echo "Nginx rollback success."
+        if docker exec rp-gym-nginx nginx -t; then
+            if docker exec rp-gym-nginx nginx -s reload; then
+                echo "Nginx rollback success."
+            else
+                echo "Nginx rollback reload failed."
+                return 1
+            fi
+        else
+            echo "Nginx rollback configuration test failed."
+            return 1
+        fi
     else
-        echo "Nginx rollback configuration test failed."
-        return 1
+        echo "No previous environment exists. Skipping Nginx traffic rollback."
+
+        cat > "${NGINX_CONF}" <<EOF
+upstream gateway {
+    server gateway-${BEFORE}:19001;
+}
+EOF
+
+        if [ "${NGINX_WAS_RUNNING}" = false ]; then
+            echo "Stopping Nginx started by this deployment."
+            docker compose -f "${COMPOSE_FILE}" stop nginx || true
+        fi
     fi
 
     echo "Stopping target environment: ${TARGET}"
@@ -117,11 +158,6 @@ fi
 
 echo "Target environment is healthy."
 
-if ! docker ps --format '{{.Names}}' | grep -q "^rp-gym-nginx$"; then
-    echo "Nginx is not running. Starting Nginx..."
-    docker compose -f "${COMPOSE_FILE}" up -d nginx
-fi
-
 echo "Switch Nginx to gateway-${TARGET}"
 
 cat > "${NGINX_CONF}" <<EOF
@@ -130,43 +166,62 @@ upstream gateway {
 }
 EOF
 
-echo "Testing Nginx configuration"
+if [ "${NGINX_WAS_RUNNING}" = false ]; then
+    echo "Nginx is not running. Starting Nginx..."
 
-if ! docker exec rp-gym-nginx nginx -t; then
-    echo "Nginx configuration test failed."
+    if ! docker compose -f "${COMPOSE_FILE}" up -d nginx; then
+        echo "Nginx start failed."
 
-    cat > "${NGINX_CONF}" <<EOF
-upstream gateway {
-    server gateway-${BEFORE}:19001;
-}
-EOF
+        if ! rollback; then
+            echo "CRITICAL: Automatic rollback failed."
+        fi
 
-    exit 1
-fi
-
-echo "Reload Nginx"
-
-if ! docker exec rp-gym-nginx nginx -s reload; then
-    echo "Nginx reload failed."
-    echo "Restoring previous environment: gateway-${BEFORE}"
-
-    cat > "${NGINX_CONF}" <<EOF
-upstream gateway {
-    server gateway-${BEFORE}:19001;
-}
-EOF
-
-    if docker exec rp-gym-nginx nginx -t; then
-        docker exec rp-gym-nginx nginx -s reload
-        echo "Nginx rollback success."
-    else
-        echo "Nginx rollback configuration test failed."
+        exit 1
     fi
 
-    exit 1
-fi
+    echo "Testing Nginx configuration"
 
-echo "Nginx switched to gateway-${TARGET}"
+    if ! docker exec rp-gym-nginx nginx -t; then
+        echo "Nginx configuration test failed."
+
+        if ! rollback; then
+            echo "CRITICAL: Automatic rollback failed."
+        fi
+
+        exit 1
+    fi
+
+    echo "Nginx started with gateway-${TARGET}"
+
+else
+    echo "Testing Nginx configuration"
+
+    if ! docker exec rp-gym-nginx nginx -t; then
+        echo "Nginx configuration test failed."
+
+        cat > "${NGINX_CONF}" <<EOF
+upstream gateway {
+    server gateway-${BEFORE}:19001;
+}
+EOF
+
+        exit 1
+    fi
+
+    echo "Reload Nginx"
+
+    if ! docker exec rp-gym-nginx nginx -s reload; then
+        echo "Nginx reload failed."
+
+        if ! rollback; then
+            echo "CRITICAL: Automatic rollback failed."
+        fi
+
+        exit 1
+    fi
+
+    echo "Nginx switched to gateway-${TARGET}"
+fi
 
 echo "Verify target environment"
 
@@ -191,12 +246,16 @@ fi
 
 echo "Target environment verification successful."
 
-echo "Connection Draining: ${DRAIN_SECONDS}s"
-sleep "${DRAIN_SECONDS}"
+if [ "${HAS_BEFORE_ENV}" = true ]; then
+    echo "Connection Draining: ${DRAIN_SECONDS}s"
+    sleep "${DRAIN_SECONDS}"
 
-echo "Stop ${BEFORE} Environment"
+    echo "Stop ${BEFORE} Environment"
 
-docker compose -f "${COMPOSE_FILE}" stop "${BEFORE_SERVICES[@]}"
+    docker compose -f "${COMPOSE_FILE}" stop "${BEFORE_SERVICES[@]}"
+else
+    echo "No previous environment to stop."
+fi
 
 echo "Deploy Success"
 echo "Active Environment : ${TARGET}"
