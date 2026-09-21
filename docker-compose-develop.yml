@@ -61,6 +61,26 @@ services:
     networks:
       - app-network
 
+  postgres-notification:
+    image: postgres:16
+    container_name: rp-gym-postgres-notification
+    restart: unless-stopped
+    ports:
+      - "19043:5432"
+    environment:
+      POSTGRES_DB: notification_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - postgres-notification-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d notification_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
   # kafka
   kafka:
     image: apache/kafka:4.3.1
@@ -208,6 +228,7 @@ volumes:
   postgres-user-data:
   postgres-health-data:
   postgres-game-data:
+  postgres-notification-data:
   prometheus-data:
   grafana-data:
   loki-data:
