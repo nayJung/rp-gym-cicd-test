@@ -67,6 +67,28 @@ services:
     networks:
       - shared-network
 
+  postgres-notification:
+    image: postgres:16
+    container_name: rp-gym-postgres-notification
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_DB: notification_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+    volumes:
+      - postgres-notification-data:/var/lib/postgresql/data
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d notification_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - shared-network
+
   # Kafka
   kafka:
     image: apache/kafka:4.3.1
@@ -472,6 +494,8 @@ services:
 
       ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
 
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+
     expose:
       - "19011"
 
@@ -516,6 +540,8 @@ services:
       EUREKA_PREFER_IP_ADDRESS: "false"
 
       ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
 
     expose:
       - "19011"
@@ -650,6 +676,10 @@ services:
     stop_grace_period: 40s
 
     environment:
+      POSTGRES_URL: jdbc:postgresql://postgres-notification:5432/notification_db
+      POSTGRES_USERNAME: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
 
       EUREKA_INSTANCE_HOSTNAME: notification-service-blue
@@ -669,6 +699,8 @@ services:
       start_period: 30s
 
     depends_on:
+      postgres-notification:
+        condition: service_healthy
       eureka-server-blue:
         condition: service_healthy
       kafka:
@@ -689,6 +721,10 @@ services:
     stop_grace_period: 40s
 
     environment:
+      POSTGRES_URL: jdbc:postgresql://postgres-notification:5432/notification_db
+      POSTGRES_USERNAME: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
 
       EUREKA_INSTANCE_HOSTNAME: notification-service-green
@@ -708,6 +744,8 @@ services:
       start_period: 30s
 
     depends_on:
+      postgres-notification:
+        condition: service_healthy
       eureka-server-green:
         condition: service_healthy
       kafka:
@@ -743,6 +781,7 @@ volumes:
   postgres-user-data:
   postgres-health-data:
   postgres-game-data:
+  postgres-notification-data:
 
   kafka-data:
   redis-data:
