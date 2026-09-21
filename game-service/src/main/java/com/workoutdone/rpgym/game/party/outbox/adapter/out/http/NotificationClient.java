@@ -9,7 +9,7 @@ import org.springframework.web.bind.annotation.RequestHeader;
 // ── 알림 담당에게 ─────────────────────────────────────────────────────
 // 파티가 알림 서비스를 호출하는 입구다. 이 엔드포인트를 만들어 주셔야 한다.
 //
-//   POST /api/v1/notifications/events
+//   POST /api/v1/internal/notifications/events
 //   헤더  eventType: PARTY_INVITED | PARTY_INVITATION_CLOSED | PARTY_MEMBER_JOINED
 //                  | PARTY_MEMBER_LEFT | PARTY_ENDED
 //   본문  { "eventId", "eventType", "occurredAt", "userId", "data": { ... } }
@@ -27,10 +27,16 @@ import org.springframework.web.bind.annotation.RequestHeader;
 // 반대로 말하면 4xx 를 주면 그 이벤트는 영원히 재시도되므로, 못 쓰는 본문이면 2xx 로 받고 버릴 것.
 //
 // 서비스 이름은 유레카에 등록된 notification-service 다. 주소를 하드코딩하지 않는다.
+//
+// 경로가 /api/v1/internal/ 로 시작하는 것은 이 레포의 관례다. 게이트웨이 SecurityConfig 가
+// 그 접두사를 인증 없이 열어 두고, 대신 외부에는 노출하지 않는 서비스 간 전용 경로로 쓴다.
+// health-service 가 user-service 를 부르는 UserServiceClient 도 같은 모양이다.
+// 이 호출은 게이트웨이를 거치지 않고 유레카로 직접 가므로 X-User-Id 헤더도 붙지 않는다.
+// 알림 대상은 헤더가 아니라 본문 envelope 의 userId 다.
 // ──────────────────────────────────────────────────────────────────────
 @FeignClient(name = "notification-service")
 public interface NotificationClient {
 
-    @PostMapping(value = "/api/v1/notifications/events", consumes = MediaType.APPLICATION_JSON_VALUE)
+    @PostMapping(value = "/api/v1/internal/notifications/events", consumes = MediaType.APPLICATION_JSON_VALUE)
     void send(@RequestHeader("eventType") String eventType, @RequestBody String envelopeJson);
 }
