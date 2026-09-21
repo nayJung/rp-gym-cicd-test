@@ -6,6 +6,8 @@ PROJECT_PATH="/home/ubuntu/rp-gym"
 COMPOSE_FILE="${PROJECT_PATH}/docker-compose-prod.yml"
 NGINX_CONF="${PROJECT_PATH}/nginx/service-url.inc"
 DRAIN_SECONDS=10
+NGINX_READY_RETRIES=15
+NGINX_READY_INTERVAL=2
 
 cd "${PROJECT_PATH}"
 
@@ -66,14 +68,12 @@ BEFORE_SERVICES=(
     "notification-service-${BEFORE}"
 )
 
-# 이전 환경이 실제로 실행 중인지 확인
 if docker inspect -f '{{.State.Running}}' "rp-gym-gateway-${BEFORE}" 2>/dev/null | grep -q '^true$'; then
     HAS_BEFORE_ENV=true
 else
     HAS_BEFORE_ENV=false
 fi
 
-# 배포 시작 시점에 Nginx가 실행 중이었는지 확인
 if docker inspect -f '{{.State.Running}}' rp-gym-nginx 2>/dev/null | grep -q '^true$'; then
     NGINX_WAS_RUNNING=true
 else
@@ -98,25 +98,19 @@ upstream gateway {
 }
 EOF
 
-        if docker exec rp-gym-nginx nginx -t; then
-            if docker exec rp-gym-nginx nginx -s reload; then
-                echo "Nginx rollback success."
-            else
-                echo "Nginx rollback reload failed."
-                return 1
-            fi
-        else
+        if ! docker exec rp-gym-nginx nginx -t; then
             echo "Nginx rollback configuration test failed."
             return 1
         fi
+
+        if ! docker exec rp-gym-nginx nginx -s reload; then
+            echo "Nginx rollback reload failed."
+            return 1
+        fi
+
+        echo "Nginx rollback success."
     else
         echo "No previous environment exists. Skipping Nginx traffic rollback."
-
-        cat > "${NGINX_CONF}" <<EOF
-upstream gateway {
-    server gateway-${BEFORE}:19001;
-}
-EOF
 
         if [ "${NGINX_WAS_RUNNING}" = false ]; then
             echo "Stopping Nginx started by this deployment."
@@ -130,6 +124,30 @@ EOF
 
     echo "Rollback Success"
     return 0
+}
+
+wait_for_gateway() {
+    echo "Waiting for gateway-${TARGET} to become reachable..."
+
+    for ((i=1; i<=NGINX_READY_RETRIES; i++)); do
+        HTTP_CODE=$(curl \
+            --max-time 2 \
+            -s \
+            -o /dev/null \
+            -w "%{http_code}" \
+            http://localhost/ || true)
+
+        if [[ "${HTTP_CODE}" =~ ^[1-4][0-9][0-9]$ ]]; then
+            echo "Gateway is reachable. HTTP status: ${HTTP_CODE}"
+            return 0
+        fi
+
+        echo "Gateway is not reachable yet. HTTP status: ${HTTP_CODE:-000} (attempt ${i}/${NGINX_READY_RETRIES})"
+        sleep "${NGINX_READY_INTERVAL}"
+    done
+
+    echo "Gateway failed to become reachable."
+    return 1
 }
 
 echo "Start Shared Infrastructure"
@@ -225,16 +243,7 @@ fi
 
 echo "Verify target environment"
 
-HTTP_CODE=$(curl \
-    --max-time 5 \
-    -s \
-    -o /dev/null \
-    -w "%{http_code}" \
-    http://localhost/ || true)
-
-echo "Gateway HTTP status: ${HTTP_CODE}"
-
-if [[ ! "${HTTP_CODE}" =~ ^[1-4][0-9][0-9]$ ]]; then
+if ! wait_for_gateway; then
     echo "Target environment verification failed."
 
     if ! rollback; then
