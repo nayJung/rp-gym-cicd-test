@@ -410,7 +410,6 @@ services:
 
     container_name: rp-gym-health-blue
     restart: unless-stopped
-    stop_grace_period: 30s
 
     environment:
       POSTGRES_URL: jdbc:postgresql://postgres-health:5432/health_db
@@ -449,7 +448,6 @@ services:
 
     container_name: rp-gym-health-green
     restart: unless-stopped
-    stop_grace_period: 30s
 
     environment:
       POSTGRES_URL: jdbc:postgresql://postgres-health:5432/health_db
