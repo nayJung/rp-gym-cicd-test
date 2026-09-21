@@ -244,6 +244,13 @@ services:
     expose:
       - "19000"
 
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:19000/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     networks:
       - blue-network
 
@@ -262,9 +269,15 @@ services:
     expose:
       - "19000"
 
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:19000/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     networks:
       - green-network
-
 
   # Gateway Blue
   gateway-blue:
@@ -274,6 +287,7 @@ services:
 
     container_name: rp-gym-gateway-blue
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       EUREKA_SERVER_URL: http://eureka-server-blue:19000/eureka/
@@ -284,8 +298,16 @@ services:
       - "19001"
       - "19091"
 
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:19091/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
-      - eureka-server-blue
+      eureka-server-blue:
+        condition: service_healthy
 
     networks:
       - blue-network
@@ -298,6 +320,7 @@ services:
 
     container_name: rp-gym-gateway-green
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       EUREKA_SERVER_URL: http://eureka-server-green:19000/eureka/
@@ -308,8 +331,16 @@ services:
       - "19001"
       - "19091"
 
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:19091/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
-      - eureka-server-green
+      eureka-server-green:
+        condition: service_healthy
 
     networks:
       - green-network
@@ -322,6 +353,7 @@ services:
 
     container_name: rp-gym-user-blue
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       POSTGRES_URL: jdbc:postgresql://postgres-user:5432/user_db
@@ -344,11 +376,18 @@ services:
     expose:
       - "19010"
 
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:19010/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
       postgres-user:
         condition: service_healthy
       eureka-server-blue:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
       redis:
@@ -366,6 +405,7 @@ services:
 
     container_name: rp-gym-user-green
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       POSTGRES_URL: jdbc:postgresql://postgres-user:5432/user_db
@@ -388,11 +428,18 @@ services:
     expose:
       - "19010"
 
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:19010/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
       postgres-user:
         condition: service_healthy
       eureka-server-green:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
       redis:
@@ -410,6 +457,7 @@ services:
 
     container_name: rp-gym-health-blue
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       POSTGRES_URL: jdbc:postgresql://postgres-health:5432/health_db
@@ -427,11 +475,18 @@ services:
     expose:
       - "19011"
 
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:19011/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
       postgres-health:
         condition: service_healthy
       eureka-server-blue:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
 
@@ -447,6 +502,7 @@ services:
 
     container_name: rp-gym-health-green
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       POSTGRES_URL: jdbc:postgresql://postgres-health:5432/health_db
@@ -464,11 +520,18 @@ services:
     expose:
       - "19011"
 
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:19011/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
       postgres-health:
         condition: service_healthy
       eureka-server-green:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
 
@@ -484,6 +547,7 @@ services:
 
     container_name: rp-gym-game-blue
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       POSTGRES_URL: jdbc:postgresql://postgres-game:5432/game_db
@@ -504,11 +568,18 @@ services:
     expose:
       - "19012"
 
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:19012/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
       postgres-game:
         condition: service_healthy
       eureka-server-blue:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
       redis:
@@ -526,6 +597,7 @@ services:
 
     container_name: rp-gym-game-green
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       POSTGRES_URL: jdbc:postgresql://postgres-game:5432/game_db
@@ -546,11 +618,18 @@ services:
     expose:
       - "19012"
 
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:19012/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
       postgres-game:
         condition: service_healthy
       eureka-server-green:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
       redis:
@@ -568,6 +647,7 @@ services:
 
     container_name: rp-gym-notification-blue
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -581,9 +661,16 @@ services:
     expose:
       - "19013"
 
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:19013/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
       eureka-server-blue:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
 
@@ -599,6 +686,7 @@ services:
 
     container_name: rp-gym-notification-green
     restart: unless-stopped
+    stop_grace_period: 40s
 
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9092
@@ -612,9 +700,16 @@ services:
     expose:
       - "19013"
 
+    healthcheck:
+      test: [ "CMD", "curl", "-fsS", "http://localhost:19013/actuator/health" ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
     depends_on:
       eureka-server-green:
-        condition: service_started
+        condition: service_healthy
       kafka:
         condition: service_started
 

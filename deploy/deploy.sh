@@ -5,8 +5,24 @@ set -e
 PROJECT_PATH="/home/ubuntu/rp-gym"
 COMPOSE_FILE="${PROJECT_PATH}/docker-compose-prod.yml"
 NGINX_CONF="${PROJECT_PATH}/nginx/service-url.inc"
+DRAIN_SECONDS=10
 
 cd "${PROJECT_PATH}"
+
+ENV_FILE="${PROJECT_PATH}/.env"
+
+if [ ! -f "${ENV_FILE}" ]; then
+    echo ".env file not found: ${ENV_FILE}"
+    exit 1
+fi
+
+for VAR in ZIPKIN_UI_USER ZIPKIN_UI_PASSWORD_HASH GRAFANA_ROOT_URL
+do
+    if ! grep -qE "^${VAR}=.+" "${ENV_FILE}"; then
+        echo "Required environment variable is missing or empty: ${VAR}"
+        exit 1
+    fi
+done
 
 echo "Blue-Green Deploy Start"
 
@@ -50,6 +66,28 @@ BEFORE_SERVICES=(
     "notification-service-${BEFORE}"
 )
 
+rollback() {
+    echo "Restoring previous environment: gateway-${BEFORE}"
+
+    cat > "${NGINX_CONF}" <<EOF
+upstream gateway {
+    server gateway-${BEFORE}:19001;
+}
+EOF
+
+    if docker exec rp-gym-nginx nginx -t; then
+        docker exec rp-gym-nginx nginx -s reload
+        echo "Nginx rollback success."
+    else
+        echo "Nginx rollback configuration test failed."
+        return 1
+    fi
+
+    echo "Stopping target environment: ${TARGET}"
+
+    docker compose -f "${COMPOSE_FILE}" stop "${TARGET_SERVICES[@]}" || true
+}
+
 echo "Start Shared Infrastructure"
 
 docker compose -f "${COMPOSE_FILE}" up -d \
@@ -66,126 +104,27 @@ docker compose -f "${COMPOSE_FILE}" up -d \
 
 echo "Build & Start ${TARGET}"
 
-docker compose -f "${COMPOSE_FILE}" up -d --build "${TARGET_SERVICES[@]}"
+if ! docker compose -f "${COMPOSE_FILE}" up -d --build --wait --wait-timeout 300 "${TARGET_SERVICES[@]}"; then
+    echo "Target environment failed to become healthy."
+    docker compose -f "${COMPOSE_FILE}" ps
+    docker compose -f "${COMPOSE_FILE}" logs --tail=100 "${TARGET_SERVICES[@]}"
+    exit 1
+fi
 
-echo "Checking ${TARGET} containers..."
+echo "Target environment is healthy."
 
-for SERVICE in "${TARGET_SERVICES[@]}"
-do
-    CONTAINER=$(docker compose -f "${COMPOSE_FILE}" ps -q "${SERVICE}")
+if ! docker ps --format '{{.Names}}' | grep -q "^rp-gym-nginx$"; then
+    echo "Nginx is not running. Starting Nginx..."
+    docker compose -f "${COMPOSE_FILE}" up -d nginx
+fi
 
-    if [ -z "${CONTAINER}" ]; then
-        echo "Container not found: ${SERVICE}"
-        exit 1
-    fi
-
-    STATUS=$(docker inspect --format '{{.State.Status}}' "${CONTAINER}")
-
-    if [ "${STATUS}" != "running" ]; then
-        echo "Container is not running: ${SERVICE}"
-        exit 1
-    fi
-
-    echo "${SERVICE}: running"
-done
-
-check_health() {
-    SERVICE_NAME="$1"
-    CONTAINER_NAME="$2"
-    PORT="$3"
-
-    echo "${SERVICE_NAME} Health Check"
-
-    SUCCESS=false
-
-    for RETRY in {1..30}
-    do
-        if docker exec "${CONTAINER_NAME}" curl -fs "http://localhost:${PORT}/actuator/health" > /dev/null
-        then
-            SUCCESS=true
-            echo "${SERVICE_NAME} Health Check Success"
-            break
-        fi
-
-        echo "Retry... (${RETRY}/30)"
-        sleep 5
-    done
-
-    if [ "${SUCCESS}" = false ]; then
-        echo "${SERVICE_NAME} Health Check Failed"
-
-        docker compose -f "${COMPOSE_FILE}" logs --tail=100 "${SERVICE_NAME}"
-
-        exit 1
-    fi
-}
-
-echo "Health Check"
-
-check_health "eureka-server-${TARGET}" "rp-gym-eureka-${TARGET}" 19000
-check_health "gateway-${TARGET}" "rp-gym-gateway-${TARGET}" 19091
-check_health "user-service-${TARGET}" "rp-gym-user-${TARGET}" 19010
-check_health "health-service-${TARGET}" "rp-gym-health-${TARGET}" 19011
-check_health "game-service-${TARGET}" "rp-gym-game-${TARGET}" 19012
-check_health "notification-service-${TARGET}" "rp-gym-notification-${TARGET}" 19013
-
-echo "Start Nginx"
-
-docker compose -f "${COMPOSE_FILE}" up -d nginx
-
-echo "Switch Nginx"
+echo "Switch Nginx to gateway-${TARGET}"
 
 cat > "${NGINX_CONF}" <<EOF
 upstream gateway {
     server gateway-${TARGET}:19001;
 }
 EOF
-
-if docker ps --format '{{.Names}}' | grep -q "^rp-gym-nginx$"; then
-    echo "Testing Nginx configuration"
-
-    if ! docker exec rp-gym-nginx nginx -t; then
-        echo "Nginx configuration test failed."
-
-        cat > "${NGINX_CONF}" <<EOF
-upstream gateway {
-    server gateway-${BEFORE}:19001;
-}
-EOF
-
-        exit 1
-    fi
-
-    echo "Reload Nginx"
-
-    if ! docker exec rp-gym-nginx nginx -s reload; then
-        echo "Nginx reload failed."
-        echo "Restoring previous environment: gateway-${BEFORE}"
-
-        cat > "${NGINX_CONF}" <<EOF
-upstream gateway {
-    server gateway-${BEFORE}:19001;
-}
-EOF
-
-        if docker exec rp-gym-nginx nginx -t; then
-            docker exec rp-gym-nginx nginx -s reload
-            echo "Nginx rollback success."
-        else
-            echo "Nginx rollback configuration test failed."
-        fi
-
-        exit 1
-    fi
-
-    echo "Nginx switched to gateway-${TARGET}"
-else
-    echo "Start Nginx"
-
-    docker compose -f "${COMPOSE_FILE}" up -d nginx
-
-    echo "Nginx started with gateway-${TARGET}"
-fi
 
 echo "Testing Nginx configuration"
 
@@ -224,6 +163,32 @@ EOF
 fi
 
 echo "Nginx switched to gateway-${TARGET}"
+
+echo "Verify target environment"
+
+HTTP_CODE=$(curl \
+    --max-time 5 \
+    -s \
+    -o /dev/null \
+    -w "%{http_code}" \
+    http://localhost/)
+
+echo "Gateway HTTP status: ${HTTP_CODE}"
+
+if [[ ! "${HTTP_CODE}" =~ ^[1-4][0-9][0-9]$ ]]; then
+    echo "Target environment verification failed."
+
+    if ! rollback; then
+        echo "CRITICAL: Automatic rollback failed."
+    fi
+
+    exit 1
+fi
+
+echo "Target environment verification successful."
+
+echo "Connection Draining: ${DRAIN_SECONDS}s"
+sleep "${DRAIN_SECONDS}"
 
 echo "Stop ${BEFORE} Environment"
 
