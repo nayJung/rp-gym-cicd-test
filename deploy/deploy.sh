@@ -97,6 +97,7 @@ docker compose -f "${COMPOSE_FILE}" up -d \
     postgres-user \
     postgres-health \
     postgres-game \
+    postgres-notification \
     kafka \
     redis \
     prometheus \
