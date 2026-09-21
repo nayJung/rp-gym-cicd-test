@@ -81,6 +81,27 @@ public class PartyCloser {
         int canceled = invitationCloser.closeAllPending(party, InvitationCloseReason.PARTY_CLOSED, now);
         List<UUID> members = memberRepository.findActiveUserIdsByPartyId(partyId);
 
+        // ── 퀘스트 담당에게 ───────────────────────────────────────────────
+        // 파티 퀘스트 생성 요청은 여기서 나간다. 이것 하나만 구독하면 된다.
+        //
+        //   토픽    game.events  (rpgym.party.outbox.topic — quest 와 같은 토픽)
+        //   헤더    eventType = PARTY_MATCHED
+        //   키      ownerId
+        //   본문    { eventId, eventType, occurredAt, userId, data: PartyMatchedData }
+        //
+        // @KafkaListener 로 받는다. @TransactionalEventListener 가 아니다 —
+        // 이 트랜잭션은 릴레이가 발행하기 한참 전에 이미 커밋돼 있다.
+        // 컨슈머 그룹은 알림 쪽과 분리할 것. game-service 가 자기 토픽을 구독하게 되므로
+        // 자기가 낸 QUEST_CREATED 등도 들어온다. eventType 으로 거르고 나머지는 넘겨야 한다.
+        //
+        // 파티당 정확히 1번이다. 마감 경로가 4개지만 위 closeRecruiting 조건부 UPDATE 가
+        // 하나만 통과시키고, uk_party_outbox_events_aggregate 가 DB 레벨 2차 방어다.
+        // 그래도 카프카는 at-least-once 라 재배달은 온다. 멱등키는 소비 측 책임이다.
+        //
+        // 수락 · 거절은 없다. 받으면 만드는 것이고, 만들지 말지 · 기한 · 보상 XP ·
+        // 멤버별 baseline · 완료 판정 · XP 지급은 전부 퀘스트 판단이다. 파티는 관여하지 않는다.
+        // 상세: https://github.com/workout-done/rp-gym/issues/122
+        // ──────────────────────────────────────────────────────────────────
         outboxRecorder.append(
                 PartyAggregateType.PARTY,
                 partyId,

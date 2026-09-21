@@ -18,6 +18,14 @@ import org.springframework.stereotype.Component;
 import java.util.UUID;
 
 /**
+ * [존폐 미정 — #122] 슬랙 버튼 응답을 게임으로 넘기는 방식이 도메인마다 갈려 있다.
+ * 파티는 이 컨슈머(Kafka), 퀘스트는 수락 REST API 다. 알림 쪽이 양쪽을 다 구현하게 되므로
+ * 하나로 통일해야 한다. REST 로 정해지면 이 클래스와 notification.events 구독을 제거하고
+ * PartyInvitationController 의 accept/reject 가 슬랙 경로까지 겸한다.
+ * Kafka 로 정해지면 이대로 두고 퀘스트 쪽이 컨슈머를 추가한다.
+ * 어느 쪽이든 PartyInvitationService.accept()/reject() 로 수렴하므로 판정 로직은 바뀌지 않는다.
+ *
+ * ──────────────────────────────────────────────────────────────────────
  * notification.events 에서 슬랙 버튼의 응답을 받는다.
  *
  * 슬랙 → Notification → 이벤트 → 여기 → 상태 변경 → PARTY_INVITATION_CLOSED → Notification → 슬랙.
