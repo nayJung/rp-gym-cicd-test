@@ -171,7 +171,7 @@ HTTP_CODE=$(curl \
     -s \
     -o /dev/null \
     -w "%{http_code}" \
-    http://localhost/)
+    http://localhost/ || true)
 
 echo "Gateway HTTP status: ${HTTP_CODE}"
 
