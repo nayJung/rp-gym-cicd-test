@@ -86,6 +86,9 @@ EOF
     echo "Stopping target environment: ${TARGET}"
 
     docker compose -f "${COMPOSE_FILE}" stop "${TARGET_SERVICES[@]}" || true
+
+    echo "Rollback Success"
+    return 0
 }
 
 echo "Start Shared Infrastructure"
