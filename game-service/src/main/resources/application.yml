@@ -172,7 +172,8 @@ rpgym:
       # 파티 종료 · 초대 만료 정리 주기(ms)
       end-interval: 60000
     outbox:
-      # 파티 전용 outbox(party_outbox_events) 릴레이. 토픽은 quest 와 같은 game.events — Notification 이 eventType 헤더로 분기한다
+      # 파티 전용 outbox(party_outbox_events) 릴레이. 알림용 5종은 HTTP 로 나가고, PARTY_MATCHED 만 이 토픽으로 나간다.
+      # 퀘스트는 이 토픽을 구독하지 않는다 (#122 확정: 파티 ↔ 퀘스트 는 Spring 이벤트만). 현재 PARTY_MATCHED 는 듣는 쪽이 없다
       topic: game.events
       poll-interval: 1000
       poll-size: 100

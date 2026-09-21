@@ -93,8 +93,8 @@ public class PartyMatchingService {
                 props.maxMember(), now, props.recruitDuration(), props.lifetime()));
         enroller.enroll(PartyMember.owner(UUID.randomUUID(), party.getId(), userId, now));
 
-        // [비활성 — #122] 직접 생성과 같은 이유로 멈춰 뒀다. PartyCommandService.create() 의 주석 참고.
-        // 매칭으로 만들어진 파티도 모집 마감 때 PartyCloser 가 PARTY_MATCHED 를 내보낸다.
+        // [비활성 — #122 확정] 직접 생성과 같다. 퀘스트는 파티 생성을 알 필요가 없고, 파티 퀘스트는 파티장이 퀘스트 API 로 만든다.
+        // 파티 ↔ 퀘스트 는 Kafka · REST 없이 Spring 이벤트만. PartyCommandService.create() 의 주석 참고.
         // events.publishEvent(new PartyQuestRequested(
         //         party.getId(), userId, party.getMetric(),
         //         now, party.getMatchingDeadlineAt(), party.getEndsAt()));

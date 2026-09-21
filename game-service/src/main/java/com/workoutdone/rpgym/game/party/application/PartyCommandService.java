@@ -48,7 +48,8 @@ public class PartyCommandService {
 
     ///파티 생성. parties + party_members(OWNER) 가 한 트랜잭션임.
     ///metric 은 필수 — 파티 퀘스트가 이 지표 하나만 본다.
-    ///생성한 사람이 파티장이고, 파티장이 만든다는 것 자체가 퀘스트 생성 요청이다. 별도 API 없이 여기서 PartyQuestRequested 를 발행한다.
+    ///파티 생성은 퀘스트 생성 요청이 아니다 (#122 확정). 파티 퀘스트는 퀘스트가 만든 파티장용 API 로 파티장이 따로 만든다.
+    ///파티 ↔ 퀘스트 는 Kafka · REST 없이, 필요한 것만 Spring 이벤트로 주고받는다. 여기서는 아무것도 발행하지 않는다.
     @Transactional
     public PartyView create(UUID userId, String partyName, PartyVisibility visibility, PartyMetric metric){
         enroller.assertNotInParty(userId);
@@ -64,9 +65,9 @@ public class PartyCommandService {
 
         PartyMember owner = enroller.enroll(PartyMember.owner(UUID.randomUUID(), party.getId(), userId, now));
 
-        // [비활성 — #122] 파티 퀘스트 생성 요청은 모집 마감 때 나가는 Kafka PARTY_MATCHED 로 옮겼다.
-        // 여기서 보내면 그 시점에 멤버가 파티장 한 명뿐이라 1인 파티 퀘스트가 되고,
-        // 이후 24시간 동안 들어온 멤버가 낄 자리가 없다. 발행 지점은 PartyCloser 를 볼 것.
+        // [비활성 — #122 확정] 퀘스트는 파티 생성을 알 필요가 없다. 파티장이 퀘스트 API 를 호출해 파티 퀘스트를 만들고,
+        // 퀘스트가 그때 party_members 를 읽는다. Kafka PARTY_MATCHED 도 퀘스트 트리거가 아니다.
+        // 파티 ↔ 퀘스트 는 필요한 것만 Spring 이벤트다 — 퀘스트가 원하면 이 규약(PartyQuestRequested)을 그대로 쓴다.
         // events.publishEvent(new PartyQuestRequested(
         //         party.getId(), userId, party.getMetric(),
         //         now, party.getMatchingDeadlineAt(), party.getEndsAt()));

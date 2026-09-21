@@ -23,7 +23,7 @@ import java.util.UUID;
 //// RECRUITING -> ACTIVE 전이와 그에 딸린 후처리(PENDING 초대 취소, PARTY_MATCHED 발행).
 ////마감 경로는 4개 : 최대인원 4명도달하거나 초대 수락하거나 매칭하거나 파티장이 시작하거나 배치(마감 시각 24시 경과)가 다되거나
 /// 넷이 같은 순간에 와도 조건부 UPDATE 는 하나만 성공되고 성공한 호출만 후처리를 시작.
-/// PARTY_MATCHED가 두번 나가면 퀘스트담당이 파티퀘스트를 두 번 만든다.
+/// PARTY_MATCHED가 두번 나가면 알림이 "활동 시작" 슬랙을 두 번 보낸다. (퀘스트는 이 이벤트를 안 듣는다 — #122)
 /// 그래서 이 클래스 밖에서는
 ///closeRecruiting을 직접부르지않음
 @Slf4j
@@ -81,25 +81,19 @@ public class PartyCloser {
         int canceled = invitationCloser.closeAllPending(party, InvitationCloseReason.PARTY_CLOSED, now);
         List<UUID> members = memberRepository.findActiveUserIdsByPartyId(partyId);
 
-        // ── 퀘스트 담당에게 ───────────────────────────────────────────────
-        // 파티 퀘스트 생성 요청은 여기서 나간다. 이것 하나만 구독하면 된다.
+        // ── PARTY_MATCHED 는 퀘스트 트리거가 아니다 (#122 확정) ─────────────────
+        // 퀘스트 담당과 합의: 파티 → 퀘스트 통신은 Kafka 도 REST 도 쓰지 않는다. 같은 JVM 이다.
         //
-        //   토픽    game.events  (rpgym.party.outbox.topic — quest 와 같은 토픽)
-        //   헤더    eventType = PARTY_MATCHED
-        //   키      ownerId
-        //   본문    { eventId, eventType, occurredAt, userId, data: PartyMatchedData }
+        //   · 파티 퀘스트 생성은 퀘스트가 "파티장이 호출하는 API" 를 직접 만든다.
+        //     퀘스트가 metric 을 검증하고, party_members 를 그때 읽어 팀 퀘스트를 만든다.
+        //     파티가 언제 생성되고 언제 마감됐는지 퀘스트는 알 필요가 없다.
+        //   · 그래서 이 이벤트를 퀘스트가 구독하지 않는다. 퀘스트는 파티 outbox 를 보지 않는다.
+        //   · 파티 ↔ 퀘스트 사이에 꼭 주고받을 게 생기면 Spring 이벤트다 (PartyEnded 규약과 동일,
+        //     발행 측이 타입 소유 · 구독 측이 import · AFTER_COMMIT).
+        //   · 슬랙에서 팀 퀘스트 수락 · 거절은 없다. 파티장이 API 로 만드는 순간 확정이다.
         //
-        // @KafkaListener 로 받는다. @TransactionalEventListener 가 아니다 —
-        // 이 트랜잭션은 릴레이가 발행하기 한참 전에 이미 커밋돼 있다.
-        // 컨슈머 그룹은 알림 쪽과 분리할 것. game-service 가 자기 토픽을 구독하게 되므로
-        // 자기가 낸 QUEST_CREATED 등도 들어온다. eventType 으로 거르고 나머지는 넘겨야 한다.
-        //
-        // 파티당 정확히 1번이다. 마감 경로가 4개지만 위 closeRecruiting 조건부 UPDATE 가
-        // 하나만 통과시키고, uk_party_outbox_events_aggregate 가 DB 레벨 2차 방어다.
-        // 그래도 카프카는 at-least-once 라 재배달은 온다. 멱등키는 소비 측 책임이다.
-        //
-        // 수락 · 거절은 없다. 받으면 만드는 것이고, 만들지 말지 · 기한 · 보상 XP ·
-        // 멤버별 baseline · 완료 판정 · XP 지급은 전부 퀘스트 판단이다. 파티는 관여하지 않는다.
+        // 아래 append 는 그대로 둔다. 모집 마감 = 활동 시작 알림(슬랙)으로는 쓸 수 있어서다.
+        // 파티당 정확히 1번인 건 변함없다 — closeRecruiting 조건부 UPDATE + uk_party_outbox_events_aggregate.
         // 상세: https://github.com/workout-done/rp-gym/issues/122
         // ──────────────────────────────────────────────────────────────────
         outboxRecorder.append(

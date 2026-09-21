@@ -16,6 +16,10 @@ public enum PartyEventType {
     PARTY_INVITATION_CLOSED,
     PARTY_MEMBER_JOINED,
     PARTY_MEMBER_LEFT,
+    /**
+     * 모집 마감 = 활동 시작. 퀘스트 트리거가 아니다 (#122 확정) — 퀘스트는 파티 outbox 를 구독하지 않는다.
+     * 파티 퀘스트는 파티장이 퀘스트 API 로 직접 만들고, 파티 ↔ 퀘스트 는 Spring 이벤트로만 주고받는다.
+     */
     PARTY_MATCHED,
     PARTY_ENDED
 }
