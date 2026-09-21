@@ -163,6 +163,45 @@ class PartyCommandServiceTest {
         verify(invitationCloser).closeAllPending(eq(party), eq(InvitationCloseReason.PARTY_DISBANDED), any());
     }
 
+    @DisplayName("ACTIVE 파티(퀘스트 진행 중)에서는 나갈 수 없다 — 409 PARTY_NOT_RECRUITING, 아무것도 저장 · 발행하지 않는다")
+    @Test
+    void leaveActivePartyRejected() {
+        UUID owner = UUID.randomUUID();
+        Party party = Party.restore(UUID.randomUUID(), "p", owner, PartyStatus.ACTIVE, PartyVisibility.PRIVATE,
+                PartyMetric.STEPS, 4, 2, NOW.minusSeconds(1), NOW.plus(PROPS.lifetime()));
+        PartyMember ownerRow = PartyMember.owner(UUID.randomUUID(), party.getId(), owner, NOW.minusSeconds(60));
+        given(memberRepository.findActiveByUserId(owner)).willReturn(Optional.of(ownerRow));
+        given(partyRepository.findByIdForUpdate(party.getId())).willReturn(Optional.of(party));
+
+        assertThatThrownBy(() -> sut.leave(owner))
+                .isInstanceOf(PartyException.class)
+                .extracting(e -> ((PartyException) e).getErrorCode())
+                .isEqualTo(PartyErrorCode.PARTY_NOT_RECRUITING);
+
+        assertThat(ownerRow.isActive()).isTrue();
+        assertThat(party.getCurrentMember()).isEqualTo(2);
+        verify(memberRepository, never()).save(any());
+        verify(partyRepository, never()).save(any());
+        verify(outboxRecorder, never()).append(any(), any(), any(), any(), any(), any());
+    }
+
+    @DisplayName("DB 는 RECRUITING 이어도 마감 시각이 지났으면 이미 시작한 파티라 나갈 수 없다 (배치 지연 틈)")
+    @Test
+    void leaveAfterDeadlineRejectedEvenIfStatusStillRecruiting() {
+        UUID owner = UUID.randomUUID();
+        Party party = Party.restore(UUID.randomUUID(), "p", owner, PartyStatus.RECRUITING, PartyVisibility.PRIVATE,
+                PartyMetric.STEPS, 4, 2, NOW, NOW.plus(PROPS.lifetime())); // deadline == now → 모집 아님
+        PartyMember ownerRow = PartyMember.owner(UUID.randomUUID(), party.getId(), owner, NOW.minusSeconds(60));
+        given(memberRepository.findActiveByUserId(owner)).willReturn(Optional.of(ownerRow));
+        given(partyRepository.findByIdForUpdate(party.getId())).willReturn(Optional.of(party));
+
+        assertThatThrownBy(() -> sut.leave(owner))
+                .isInstanceOf(PartyException.class)
+                .extracting(e -> ((PartyException) e).getErrorCode())
+                .isEqualTo(PartyErrorCode.PARTY_NOT_RECRUITING);
+        assertThat(ownerRow.isActive()).isTrue();
+    }
+
     @DisplayName("소속 파티가 없으면 404 NOT_IN_PARTY")
     @Test
     void leaveWithoutParty() {

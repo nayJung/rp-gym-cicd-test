@@ -115,6 +115,7 @@ public class PartyCommandService {
 
     ///탈퇴. 파티 행을 잠그고 멤버 LEFT/카운터 −1, 승계, 해산을 한 번에 한다.
     ///탈퇴는 드물어 락 경합이 없고, 조건부 업데이트 한 문장으로는 4개를 못한다.
+    ///모집 중에만 나갈 수 있다. 마감 뒤엔 파티 퀘스트가 돌고 있어 멤버가 빠지면 퀘스트 쪽 목표 · 보상 계산이 깨진다.
     @Transactional
     public LeaveResultView leave(UUID userId){
         PartyMember me = memberRepository.findActiveByUserId(userId)
@@ -124,6 +125,10 @@ public class PartyCommandService {
                 .orElseThrow(() -> new IllegalArgumentException("멤버는 있는데 파티가 없습니다: " + me.getPartyId()));
 
         Instant now = clock.instant();
+        // status 만 보면 안 된다. 배치가 늦어 DB 는 RECRUITING 인데 마감 시각이 지난 파티도 이미 시작한 것이다.
+        if (!party.isRecruiting(now)){
+            throw new PartyException(PartyErrorCode.PARTY_NOT_RECRUITING);
+        }
         me.leave(now);
         memberRepository.save(me);// saveAndFlush, 아래 findActiveByPartyId 에서 나를 뺴고 읽기 위해
         party.memberLeft(); // 0이 되면 DISBANDED
