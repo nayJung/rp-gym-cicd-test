@@ -124,10 +124,11 @@ CREATE TABLE game_service.quest_suggestions (
 CREATE TABLE game_service.party_quests (
     party_quest_id UUID         NOT NULL,
 
-    -- 파티 담당자 소유 테이블 참조. 물리 FK를 걸지 않았다 --
-    -- party 테이블의 컬럼명·타입 확정본을 아직 못 받았고, 이 마이그레이션 시점에
-    -- 그 테이블이 존재하지 않을 수 있다. 확정되면 FK만 추가하는 마이그레이션을 따로 낸다.
-    party_id       UUID       NOT NULL,
+    -- 파티 담당자 소유 테이블 참조.
+    -- V5 가 parties.id 를 UUID 로 만들었으므로 여기도 UUID 다.
+    -- Flyway 는 V5 · V6 을 먼저 돌리므로 이 시점에 그 테이블이 반드시 있다. 그래서 물리 FK 를 건다.
+    -- 없는 파티로 파티 퀘스트를 만드는 것을 DB 가 막는다.
+    party_id       UUID         NOT NULL,
 
     title          VARCHAR(100) NOT NULL,
     metric         VARCHAR(20)  NOT NULL,
@@ -157,6 +158,8 @@ CREATE TABLE game_service.party_quests (
     updated_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT pk_party_quests PRIMARY KEY (party_quest_id),
+    CONSTRAINT fk_party_quests_party FOREIGN KEY (party_id)
+        REFERENCES game_service.parties (id),
     CONSTRAINT ck_party_quests_target_val  CHECK (target_val > 0),
     CONSTRAINT ck_party_quests_current_val CHECK (current_val >= 0),
     CONSTRAINT ck_party_quests_reward_xp   CHECK (reward_xp > 0),
