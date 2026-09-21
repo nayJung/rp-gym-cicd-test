@@ -13,6 +13,7 @@ dependencies {
     // Service Discovery / 서비스 간 호출
     implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
     implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
+    implementation 'org.springframework.retry:spring-retry'
 
     // ── 영속 ───────────────────────────────────────────────────────────
     // quest_offers. game-service와 동일하게 Flyway가 스키마를 만들고 JPA는 validate만 한다.

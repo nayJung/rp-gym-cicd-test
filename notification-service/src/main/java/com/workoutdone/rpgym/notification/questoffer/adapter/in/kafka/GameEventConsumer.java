@@ -16,6 +16,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.slf4j.MDC;
 import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.retry.support.RetryTemplate;
 import org.springframework.stereotype.Component;
 
 import java.util.Optional;
@@ -47,6 +48,7 @@ public class GameEventConsumer {
     private final QuestOfferService questOfferService;
     private final UserServiceClient userServiceClient;
     private final QuestOfferSlackNotifier questOfferSlackNotifier;
+    private final RetryTemplate retryTemplate;
 
     @KafkaListener(topics = "${rpgym.kafka.game-events-topic}")
     public void consume(String message) {
@@ -102,7 +104,15 @@ public class GameEventConsumer {
 
         SlackMessageResult result = questOfferSlackNotifier.sendOffer(userInfo.slackId(), data);
 
-        questOfferService.markSent(offerId.get(), result.channel(), result.ts());
+        // Slack 발송은 이미 성공한 뒤라 markSent(순수 DB 쓰기)만 짧게 로컬 재시도한다.
+        // QuestOfferService가 아니라 여기서 감싸는 이유 --
+        // retryTemplate.execute가 markSent를 프록시(빈 경계) 바깥에서 호출해야 매 시도마다 새 트랜잭션이 열린다.
+        // 이마저 다 실패하면 예외가 그대로 전파되어 Kafka가 메시지 전체를 재시도하게 된다
+        // (그 경우 prepareForSend가 PENDING을 다시 발견해 Slack을 재호출할 수 있음).
+        retryTemplate.execute(context -> {
+            questOfferService.markSent(offerId.get(), result.channel(), result.ts());
+            return null;
+        });
 
         log.info("Quest 제안 Slack 발송 완료. suggestionId={} userId={} channel={}",
                 data.suggestionId(), envelope.userId(), result.channel());
