@@ -66,6 +66,28 @@ BEFORE_SERVICES=(
     "notification-service-${BEFORE}"
 )
 
+rollback() {
+    echo "Restoring previous environment: gateway-${BEFORE}"
+
+    cat > "${NGINX_CONF}" <<EOF
+upstream gateway {
+    server gateway-${BEFORE}:19001;
+}
+EOF
+
+    if docker exec rp-gym-nginx nginx -t; then
+        docker exec rp-gym-nginx nginx -s reload
+        echo "Nginx rollback success."
+    else
+        echo "Nginx rollback configuration test failed."
+        return 1
+    fi
+
+    echo "Stopping target environment: ${TARGET}"
+
+    docker compose -f "${COMPOSE_FILE}" stop "${TARGET_SERVICES[@]}" || true
+}
+
 echo "Start Shared Infrastructure"
 
 docker compose -f "${COMPOSE_FILE}" up -d \
@@ -141,6 +163,29 @@ EOF
 fi
 
 echo "Nginx switched to gateway-${TARGET}"
+
+echo "Verify target environment"
+
+HTTP_CODE=$(curl \
+    --max-time 5 \
+    -s \
+    -o /dev/null \
+    -w "%{http_code}" \
+    http://localhost/)
+
+echo "Gateway HTTP status: ${HTTP_CODE}"
+
+if [[ ! "${HTTP_CODE}" =~ ^[1-4][0-9][0-9]$ ]]; then
+    echo "Target environment verification failed."
+
+    if ! rollback; then
+        echo "CRITICAL: Automatic rollback failed."
+    fi
+
+    exit 1
+fi
+
+echo "Target environment verification successful."
 
 echo "Connection Draining: ${DRAIN_SECONDS}s"
 sleep "${DRAIN_SECONDS}"
