@@ -126,27 +126,41 @@ EOF
     return 0
 }
 
-wait_for_gateway() {
+wait_for_target_gateway() {
+    local CONTAINER="rp-gym-gateway-${TARGET}"
+    local TARGET_IP
+    local HTTP_CODE
+
+    TARGET_IP=$(docker inspect \
+        -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' \
+        "${CONTAINER}" 2>/dev/null | awk '{print $1}')
+
+    if [ -z "${TARGET_IP}" ]; then
+        echo "Target Gateway IP not found: ${CONTAINER}"
+        return 1
+    fi
+
+    echo "Target Gateway IP: ${TARGET_IP}"
     echo "Waiting for gateway-${TARGET} to become reachable..."
 
-    for ((i=1; i<=NGINX_READY_RETRIES; i++)); do
+    for ((i=1; i<=5; i++)); do
         HTTP_CODE=$(curl \
             --max-time 2 \
             -s \
             -o /dev/null \
             -w "%{http_code}" \
-            http://localhost/ || true)
+            "http://${TARGET_IP}:19001/" || true)
 
         if [[ "${HTTP_CODE}" =~ ^[1-4][0-9][0-9]$ ]]; then
-            echo "Gateway is reachable. HTTP status: ${HTTP_CODE}"
+            echo "Target Gateway is reachable. HTTP status: ${HTTP_CODE}"
             return 0
         fi
 
-        echo "Gateway is not reachable yet. HTTP status: ${HTTP_CODE:-000} (attempt ${i}/${NGINX_READY_RETRIES})"
-        sleep "${NGINX_READY_INTERVAL}"
+        echo "Target Gateway is not reachable yet. HTTP status: ${HTTP_CODE:-000} (attempt ${i}/5)"
+        sleep 2
     done
 
-    echo "Gateway failed to become reachable."
+    echo "Target Gateway failed to become reachable."
     return 1
 }
 
@@ -243,8 +257,27 @@ fi
 
 echo "Verify target environment"
 
-if ! wait_for_gateway; then
+if ! wait_for_target_gateway; then
     echo "Target environment verification failed."
+
+    if ! rollback; then
+        echo "CRITICAL: Automatic rollback failed."
+    fi
+
+    exit 1
+fi
+
+HTTP_CODE=$(curl \
+    --max-time 5 \
+    -s \
+    -o /dev/null \
+    -w "%{http_code}" \
+    http://localhost/ || true)
+
+echo "Nginx HTTP status: ${HTTP_CODE}"
+
+if [[ ! "${HTTP_CODE}" =~ ^[1-4][0-9][0-9]$ ]]; then
+    echo "Nginx traffic verification failed."
 
     if ! rollback; then
         echo "CRITICAL: Automatic rollback failed."
