@@ -127,7 +127,7 @@ CREATE TABLE game_service.party_quests (
     -- 파티 담당자 소유 테이블 참조. 물리 FK를 걸지 않았다 --
     -- party 테이블의 컬럼명·타입 확정본을 아직 못 받았고, 이 마이그레이션 시점에
     -- 그 테이블이 존재하지 않을 수 있다. 확정되면 FK만 추가하는 마이그레이션을 따로 낸다.
-    party_id       BIGINT       NOT NULL,
+    party_id       UUID       NOT NULL,
 
     title          VARCHAR(100) NOT NULL,
     metric         VARCHAR(20)  NOT NULL,
