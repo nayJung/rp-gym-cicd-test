@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * 마지막 자리를 두고 10명이 동시에 들어오면 3명만 성공해야 한다 (1/4 → 4/4).
- * H2 · Mock 으로는 증명이 안 되는 것이라 실제 PostgreSQL 을 띄운다. Flyway 가 V1~V6 를 적용한다.
+ * H2 · Mock 으로는 증명이 안 되는 것이라 실제 PostgreSQL 을 띄운다. Flyway 가 V1~V5 를 적용한다.
  *
  * Docker 가 없는 환경(CI 일부 · 로컬)에서는 실패가 아니라 건너뛴다 — disabledWithoutDocker.
  */

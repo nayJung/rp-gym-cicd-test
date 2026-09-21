@@ -7,6 +7,8 @@ CREATE TABLE game_service.parties (
   owner_id UUID NOT NULL,
   status VARCHAR(20) NOT NULL DEFAULT 'RECRUITING',
   visibility VARCHAR(10) NOT NULL DEFAULT 'PRIVATE',
+  -- 파티 퀘스트가 볼 지표. 생성 시 확정, 불변. 애플리케이션이 반드시 넣는다 (DEFAULT 없음).
+  metric VARCHAR(20) NOT NULL,
   max_member INTEGER NOT NULL DEFAULT 4,
   current_member INTEGER NOT NULL DEFAULT 1,
   matching_deadline_at TIMESTAMPTZ NOT NULL,
@@ -16,14 +18,18 @@ CREATE TABLE game_service.parties (
   CONSTRAINT pk_parties PRIMARY KEY (id),
   CONSTRAINT ck_parties_status     CHECK (status IN ('RECRUITING', 'ACTIVE', 'ENDED', 'DISBANDED')),
   CONSTRAINT ck_parties_visibility CHECK (visibility IN ('PUBLIC', 'PRIVATE')),
+-- 값은 party 의 PartyMetric enum 과 1:1 (= quest 의 Metric 과 이름 동일). 여기 추가하면 enum 에도 추가해야 한다.
+  CONSTRAINT ck_parties_metric     CHECK (metric IN ('STEPS', 'ACTIVE_MINUTES', 'ACTIVE_CALORIES')),
   CONSTRAINT ck_parties_max_member CHECK (max_member >= 1),
 -- 카운터가 파생값이라 오염될 수 있다. 조건부 UPDATE 가 1차 방어, 이 CHECK 가 최종 방어다.
   CONSTRAINT ck_parties_member_range CHECK (current_member >= 0 AND current_member <= max_member)
 );
 
 -- 자동 매칭 탐색 전용. 조건이 고정(RECRUITING + PUBLIC)이라 부분 인덱스가 작다.
+-- 자동 매칭은 같은 metric 끼리만. metric 을 선두에 두면
+-- 조건 = metric, 정렬 = (current_member desc, created_at) 이 한 인덱스로 끝난다.
 CREATE INDEX idx_parties_matching
-    ON game_service.parties (current_member DESC, created_at ASC)
+    ON game_service.parties (metric, current_member DESC, created_at ASC)
     WHERE status = 'RECRUITING' AND visibility = 'PUBLIC';
 
 -- 모집 마감 배치
