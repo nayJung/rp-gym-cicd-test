@@ -18,12 +18,14 @@ import org.springframework.stereotype.Component;
 import java.util.UUID;
 
 /**
- * [존폐 미정 — #122] 슬랙 버튼 응답을 게임으로 넘기는 방식이 도메인마다 갈려 있다.
- * 파티는 이 컨슈머(Kafka), 퀘스트는 수락 REST API 다. 알림 쪽이 양쪽을 다 구현하게 되므로
- * 하나로 통일해야 한다. REST 로 정해지면 이 클래스와 notification.events 구독을 제거하고
- * PartyInvitationController 의 accept/reject 가 슬랙 경로까지 겸한다.
- * Kafka 로 정해지면 이대로 두고 퀘스트 쪽이 컨슈머를 추가한다.
- * 어느 쪽이든 PartyInvitationService.accept()/reject() 로 수렴하므로 판정 로직은 바뀌지 않는다.
+ * [비활성 — #122] 슬랙 버튼 응답을 REST 로 통일하기로 해서 이 컨슈머는 쓰지 않는다.
+ * 아래 @Component 와 @KafkaListener 를 주석 처리해 빈 등록과 구독을 끊었다. 코드는 남겨 둔다.
+ *
+ * 지금은 알림 서비스가 슬랙 버튼을 받아 PartyInvitationController 의 accept/reject 를 직접 호출한다.
+ * 카프카를 한 번 거치지 않으므로 유저가 버튼을 누른 결과를 알림이 동기로 받아 메시지를 갈아끼울 수 있다.
+ *
+ * 되살리려면 두 어노테이션의 주석만 풀면 된다. 판정은 PartyInvitationService.accept()/reject() 가
+ * 하고 이 클래스는 입구일 뿐이라, 입구가 늘어도 로직은 그대로다.
  *
  * ──────────────────────────────────────────────────────────────────────
  * notification.events 에서 슬랙 버튼의 응답을 받는다.
@@ -38,7 +40,8 @@ import java.util.UUID;
  * 계약 위반에 예외를 던지면 그 파티션이 영원히 막힌다. HealthEventConsumer 와 같은 규칙이다.
  */
 @Slf4j
-@Component
+// [비활성 — #122] 빈으로 등록하지 않는다. 되살리려면 아래 주석을 푼다.
+// @Component
 @RequiredArgsConstructor
 public class NotificationEventConsumer {
 
@@ -54,7 +57,8 @@ public class NotificationEventConsumer {
     private final ObjectMapper objectMapper;
     private final PartyInvitationService invitationService;
 
-    @KafkaListener(topics = "${rpgym.kafka.notification-events-topic}")
+    // [비활성 — #122] notification.events 를 구독하지 않는다. 되살리려면 아래 주석을 푼다.
+    // @KafkaListener(topics = "${rpgym.kafka.notification-events-topic}")
     public void consume(String message) {
         NotificationEventEnvelope envelope;
         try {

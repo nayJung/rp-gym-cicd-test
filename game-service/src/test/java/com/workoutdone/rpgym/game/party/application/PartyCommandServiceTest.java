@@ -16,7 +16,6 @@ import com.workoutdone.rpgym.game.party.outbox.application.PartyOutboxRecorder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 
 import java.time.Clock;
@@ -63,11 +62,11 @@ class PartyCommandServiceTest {
         given(memberRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
     }
 
-    // ───────────── 생성 = 파티장의 파티 퀘스트 생성 요청 ─────────────
+    // ───────────── 생성 ─────────────
 
-    @DisplayName("생성: RECRUITING 1/4, 생성자가 OWNER, metric 확정, PartyQuestRequested 를 발행한다")
+    @DisplayName("생성: RECRUITING 1/4, 생성자가 OWNER, metric 확정, 아무 이벤트도 내보내지 않는다")
     @Test
-    void createRequestsPartyQuest() {
+    void createParty() {
         UUID owner = UUID.randomUUID();
         given(memberRepository.findActiveByUserId(owner)).willReturn(Optional.empty());
 
@@ -83,18 +82,11 @@ class PartyCommandServiceTest {
                     assertThat(m.role()).isEqualTo(MemberRole.OWNER);
                 });
 
-        ArgumentCaptor<Object> captor = ArgumentCaptor.forClass(Object.class);
-        verify(events).publishEvent(captor.capture());
-        assertThat(captor.getValue()).isInstanceOf(PartyQuestRequested.class);
-        PartyQuestRequested requested = (PartyQuestRequested) captor.getValue();
-        assertThat(requested.partyId()).isEqualTo(view.partyId());
-        assertThat(requested.ownerId()).isEqualTo(owner);
-        assertThat(requested.metric()).isEqualTo(PartyMetric.STEPS);
-        assertThat(requested.createdAt()).isEqualTo(NOW);
-        assertThat(requested.matchingDeadlineAt()).isEqualTo(NOW.plus(PROPS.recruitDuration()));
-        assertThat(requested.endsAt()).isEqualTo(NOW.plus(PROPS.lifetime()));
-
-        // 생성 자체는 Kafka 로 안 나간다. 알림은 초대 · 마감 · 종료 때만.
+        // [#122] 예전에는 여기서 PartyQuestRequested 를 발행해 퀘스트가 스프링 이벤트로 받았다.
+        // 지금은 모집 마감 때 PartyCloser 가 내보내는 Kafka PARTY_MATCHED 하나로 일원화했다.
+        // 생성 시점에는 멤버가 파티장 한 명뿐이라 그때 만들면 1인 파티 퀘스트가 되기 때문이다.
+        // 그래서 파티 생성은 아무것도 내보내지 않는다 — 스프링 이벤트도, 아웃박스도.
+        verify(events, never()).publishEvent(any());
         verify(outboxRecorder, never()).append(any(), any(), any(), any(), any(), any());
     }
 

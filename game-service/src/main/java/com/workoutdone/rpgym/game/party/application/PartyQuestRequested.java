@@ -6,7 +6,9 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * [폐기 예정 — #122] 파티 퀘스트 생성 요청은 Kafka PARTY_MATCHED 로 간다. 이쪽을 구독하지 말 것.
+ * [비활성 — #122] 파티 퀘스트 생성 요청은 Kafka PARTY_MATCHED 로 간다. 이쪽을 구독하지 말 것.
+ * 발행부 두 곳(PartyCommandService.create, PartyMatchingService.created)을 주석 처리해 멈춰 뒀다.
+ * 타입은 남겨 둔다 — 되살릴 때 주석만 풀면 되고, 왜 안 쓰는지가 여기 적혀 있어야 다시 안 뒤진다.
  *
  * 두 가지 이유로 밀려났다.
  *   1. 이 이벤트는 파티 '생성' 시점에 나간다. 그때 멤버는 파티장 한 명뿐이라

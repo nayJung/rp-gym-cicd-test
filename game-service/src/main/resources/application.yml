@@ -76,6 +76,17 @@ spring:
       # 발행 구간도 같은 trace에 이어 붙는다
       observation-enabled: true
 
+  # 파티 알림 이벤트를 notification-service 로 밀어 넣는 Feign(#122).
+  # 릴레이가 실패 시 라운드를 멈추므로 타임아웃이 길면 뒤 이벤트가 통째로 밀린다.
+  # 카프카 발행의 send-timeout(5s)과 같은 기준으로 맞춘다.
+  cloud:
+    openfeign:
+      client:
+        config:
+          notification-service:
+            connectTimeout: 2000
+            readTimeout: 5000
+
 eureka:
   instance:
     # 로컬 IDE 실행에서는 IP 등록이 편해서 기본값이 true 다.

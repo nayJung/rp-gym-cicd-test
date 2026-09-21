@@ -93,10 +93,11 @@ public class PartyMatchingService {
                 props.maxMember(), now, props.recruitDuration(), props.lifetime()));
         enroller.enroll(PartyMember.owner(UUID.randomUUID(), party.getId(), userId, now));
 
-        // 매칭으로 만들어진 파티도 요청자가 파티장이다. 직접 생성과 같은 요청을 보낸다.
-        events.publishEvent(new PartyQuestRequested(
-                party.getId(), userId, party.getMetric(),
-                now, party.getMatchingDeadlineAt(), party.getEndsAt()));
+        // [비활성 — #122] 직접 생성과 같은 이유로 멈춰 뒀다. PartyCommandService.create() 의 주석 참고.
+        // 매칭으로 만들어진 파티도 모집 마감 때 PartyCloser 가 PARTY_MATCHED 를 내보낸다.
+        // events.publishEvent(new PartyQuestRequested(
+        //         party.getId(), userId, party.getMetric(),
+        //         now, party.getMatchingDeadlineAt(), party.getEndsAt()));
 
         log.info("파티 생성. partyId={} ownerId={} visibility=PUBLIC via=MATCHING metric={} members={}/{} matchingDeadlineAt={}",
                 party.getId(), userId, party.getMetric(), party.getCurrentMember(), party.getMaxMember(),

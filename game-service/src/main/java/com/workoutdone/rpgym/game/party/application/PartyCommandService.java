@@ -64,10 +64,12 @@ public class PartyCommandService {
 
         PartyMember owner = enroller.enroll(PartyMember.owner(UUID.randomUUID(), party.getId(), userId, now));
 
-        // 퀘스트 생성 요청. 커밋 뒤 quest 가 받는다. 퀘스트 생성이 실패해도 파티 생성은 남는다.
-        events.publishEvent(new PartyQuestRequested(
-                party.getId(), userId, party.getMetric(),
-                now, party.getMatchingDeadlineAt(), party.getEndsAt()));
+        // [비활성 — #122] 파티 퀘스트 생성 요청은 모집 마감 때 나가는 Kafka PARTY_MATCHED 로 옮겼다.
+        // 여기서 보내면 그 시점에 멤버가 파티장 한 명뿐이라 1인 파티 퀘스트가 되고,
+        // 이후 24시간 동안 들어온 멤버가 낄 자리가 없다. 발행 지점은 PartyCloser 를 볼 것.
+        // events.publishEvent(new PartyQuestRequested(
+        //         party.getId(), userId, party.getMetric(),
+        //         now, party.getMatchingDeadlineAt(), party.getEndsAt()));
 
         log.info("파티 생성. party={} ownerId={} visibility={} metric={} members={}/{} matchingDeadlineAt={}",
                 party.getId(), userId, party.getVisibility(), party.getMetric(),
