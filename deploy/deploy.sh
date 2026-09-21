@@ -11,6 +11,14 @@ NGINX_READY_INTERVAL=2
 
 cd "${PROJECT_PATH}"
 
+# 중복 배포 방지
+exec 9>/tmp/rp-gym-deploy.lock
+
+if ! flock -n 9; then
+    echo "Another deployment is already running."
+    exit 1
+fi
+
 ENV_FILE="${PROJECT_PATH}/.env"
 
 if [ ! -f "${ENV_FILE}" ]; then
@@ -33,7 +41,9 @@ if [ ! -f "${NGINX_CONF}" ]; then
     exit 1
 fi
 
-CURRENT=$(grep -E "server gateway-(blue|green):19001;" "${NGINX_CONF}" | awk '{print $2}' | cut -d':' -f1)
+CURRENT=$(grep -E "server gateway-(blue|green):19001;" "${NGINX_CONF}" \
+    | awk '{print $2}' \
+    | cut -d':' -f1)
 
 if [ "${CURRENT}" = "gateway-blue" ]; then
     TARGET="green"
@@ -68,13 +78,17 @@ BEFORE_SERVICES=(
     "notification-service-${BEFORE}"
 )
 
-if docker inspect -f '{{.State.Running}}' "rp-gym-gateway-${BEFORE}" 2>/dev/null | grep -q '^true$'; then
+# 이전 환경 존재 여부 확인
+if docker inspect -f '{{.State.Running}}' "rp-gym-gateway-${BEFORE}" 2>/dev/null \
+    | grep -q '^true$'; then
     HAS_BEFORE_ENV=true
 else
     HAS_BEFORE_ENV=false
 fi
 
-if docker inspect -f '{{.State.Running}}' rp-gym-nginx 2>/dev/null | grep -q '^true$'; then
+# 배포 시작 시점의 Nginx 상태 저장
+if docker inspect -f '{{.State.Running}}' rp-gym-nginx 2>/dev/null \
+    | grep -q '^true$'; then
     NGINX_WAS_RUNNING=true
 else
     NGINX_WAS_RUNNING=false
@@ -86,9 +100,11 @@ else
     echo "No previous environment detected. Treating as initial deployment."
 fi
 
+# Rollback
 rollback() {
     echo "Rollback Start"
 
+    # 이전 환경이 존재하는 경우
     if [ "${HAS_BEFORE_ENV}" = true ]; then
         echo "Restoring previous environment: gateway-${BEFORE}"
 
@@ -98,72 +114,127 @@ upstream gateway {
 }
 EOF
 
-        if ! docker exec rp-gym-nginx nginx -t; then
-            echo "Nginx rollback configuration test failed."
-            return 1
-        fi
+        # 배포 시작 당시 Nginx가 실행 중이었다면
+        # 설정을 되돌린 후 reload
+        if [ "${NGINX_WAS_RUNNING}" = true ]; then
+            if ! docker exec rp-gym-nginx nginx -t; then
+                echo "Nginx rollback configuration test failed."
+                return 1
+            fi
 
-        if ! docker exec rp-gym-nginx nginx -s reload; then
-            echo "Nginx rollback reload failed."
-            return 1
+            if ! docker exec rp-gym-nginx nginx -s reload; then
+                echo "Nginx rollback reload failed."
+                return 1
+            fi
+
+        # 배포 시작 당시 Nginx가 꺼져 있었다면
+        # 이전 환경 설정으로 Nginx를 새로 시작
+        else
+            echo "Nginx was not running before deployment."
+
+            docker compose -f "${COMPOSE_FILE}" stop nginx || true
+
+            if ! docker compose -f "${COMPOSE_FILE}" up -d nginx; then
+                echo "Nginx rollback start failed."
+                return 1
+            fi
+
+            if ! docker exec rp-gym-nginx nginx -t; then
+                echo "Nginx rollback configuration test failed."
+                return 1
+            fi
         fi
 
         echo "Nginx rollback success."
-    else
-        echo "No previous environment exists. Skipping Nginx traffic rollback."
 
+    # 이전 환경이 없는 최초 배포인 경우
+    else
+        echo "No previous environment exists."
+
+        # 최초 배포 전 Nginx가 꺼져 있었다면
+        # 이번 배포에서 띄운 Nginx도 정리
         if [ "${NGINX_WAS_RUNNING}" = false ]; then
             echo "Stopping Nginx started by this deployment."
             docker compose -f "${COMPOSE_FILE}" stop nginx || true
         fi
+
+        # 최초 상태의 service-url.inc 유지
+        cat > "${NGINX_CONF}" <<EOF
+upstream gateway {
+    server gateway-${BEFORE}:19001;
+}
+EOF
     fi
 
     echo "Stopping target environment: ${TARGET}"
 
-    docker compose -f "${COMPOSE_FILE}" stop "${TARGET_SERVICES[@]}" || true
+    docker compose -f "${COMPOSE_FILE}" stop \
+        "${TARGET_SERVICES[@]}" || true
 
     echo "Rollback Success"
     return 0
 }
 
+# Target Gateway Health Check
 wait_for_target_gateway() {
     local CONTAINER="rp-gym-gateway-${TARGET}"
-    local TARGET_IP
     local HTTP_CODE
 
-    TARGET_IP=$(docker inspect \
-        -f '{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}' \
-        "${CONTAINER}" 2>/dev/null | awk '{print $1}')
+    echo "Waiting for gateway-${TARGET} health..."
 
-    if [ -z "${TARGET_IP}" ]; then
-        echo "Target Gateway IP not found: ${CONTAINER}"
-        return 1
-    fi
+    for ((i=1; i<=NGINX_READY_RETRIES; i++)); do
 
-    echo "Target Gateway IP: ${TARGET_IP}"
-    echo "Waiting for gateway-${TARGET} to become reachable..."
+        HTTP_CODE=$(docker exec "${CONTAINER}" curl \
+            --max-time 2 \
+            -s \
+            -o /dev/null \
+            -w "%{http_code}" \
+            http://localhost:19091/actuator/health || true)
 
-    for ((i=1; i<=5; i++)); do
+        if [ "${HTTP_CODE}" = "200" ]; then
+            echo "Target Gateway health is UP."
+            return 0
+        fi
+
+        echo "Target Gateway health is not ready: ${HTTP_CODE:-000} (attempt ${i}/${NGINX_READY_RETRIES})"
+
+        sleep "${NGINX_READY_INTERVAL}"
+    done
+
+    echo "Target Gateway health check failed."
+    return 1
+}
+
+# Nginx Traffic Check
+wait_for_nginx_traffic() {
+    local HTTP_CODE
+
+    echo "Waiting for Nginx traffic..."
+
+    for ((i=1; i<=NGINX_READY_RETRIES; i++)); do
+
         HTTP_CODE=$(curl \
             --max-time 2 \
             -s \
             -o /dev/null \
             -w "%{http_code}" \
-            "http://${TARGET_IP}:19001/" || true)
+            http://localhost/ || true)
 
         if [[ "${HTTP_CODE}" =~ ^[1-4][0-9][0-9]$ ]]; then
-            echo "Target Gateway is reachable. HTTP status: ${HTTP_CODE}"
+            echo "Nginx traffic is available. HTTP status: ${HTTP_CODE}"
             return 0
         fi
 
-        echo "Target Gateway is not reachable yet. HTTP status: ${HTTP_CODE:-000} (attempt ${i}/5)"
-        sleep 2
+        echo "Nginx traffic is not available yet: ${HTTP_CODE:-000} (attempt ${i}/${NGINX_READY_RETRIES})"
+
+        sleep "${NGINX_READY_INTERVAL}"
     done
 
-    echo "Target Gateway failed to become reachable."
+    echo "Nginx traffic failed to become available."
     return 1
 }
 
+# Shared Infrastructure
 echo "Start Shared Infrastructure"
 
 docker compose -f "${COMPOSE_FILE}" up -d \
@@ -179,17 +250,34 @@ docker compose -f "${COMPOSE_FILE}" up -d \
     alloy \
     zipkin
 
+# Target Environment Start
 echo "Build & Start ${TARGET}"
 
-if ! docker compose -f "${COMPOSE_FILE}" up -d --build --wait --wait-timeout 300 "${TARGET_SERVICES[@]}"; then
+if ! docker compose -f "${COMPOSE_FILE}" up -d \
+    --build \
+    --wait \
+    --wait-timeout 300 \
+    "${TARGET_SERVICES[@]}"; then
+
     echo "Target environment failed to become healthy."
+
     docker compose -f "${COMPOSE_FILE}" ps
-    docker compose -f "${COMPOSE_FILE}" logs --tail=100 "${TARGET_SERVICES[@]}"
+
+    docker compose -f "${COMPOSE_FILE}" logs \
+        --tail=100 \
+        "${TARGET_SERVICES[@]}" || true
+
+    echo "Stopping failed target environment."
+
+    docker compose -f "${COMPOSE_FILE}" stop \
+        "${TARGET_SERVICES[@]}" || true
+
     exit 1
 fi
 
 echo "Target environment is healthy."
 
+# Nginx Target Switch
 echo "Switch Nginx to gateway-${TARGET}"
 
 cat > "${NGINX_CONF}" <<EOF
@@ -198,7 +286,9 @@ upstream gateway {
 }
 EOF
 
+# 최초 Nginx 기동
 if [ "${NGINX_WAS_RUNNING}" = false ]; then
+
     echo "Nginx is not running. Starting Nginx..."
 
     if ! docker compose -f "${COMPOSE_FILE}" up -d nginx; then
@@ -225,7 +315,9 @@ if [ "${NGINX_WAS_RUNNING}" = false ]; then
 
     echo "Nginx started with gateway-${TARGET}"
 
+# 기존 Nginx 전환
 else
+
     echo "Testing Nginx configuration"
 
     if ! docker exec rp-gym-nginx nginx -t; then
@@ -255,7 +347,8 @@ EOF
     echo "Nginx switched to gateway-${TARGET}"
 fi
 
-echo "Verify target environment"
+# Target Gateway Health Verification
+echo "Verify target Gateway"
 
 if ! wait_for_target_gateway; then
     echo "Target environment verification failed."
@@ -267,16 +360,10 @@ if ! wait_for_target_gateway; then
     exit 1
 fi
 
-HTTP_CODE=$(curl \
-    --max-time 5 \
-    -s \
-    -o /dev/null \
-    -w "%{http_code}" \
-    http://localhost/ || true)
+# Nginx Traffic Verification
+echo "Verify Nginx traffic"
 
-echo "Nginx HTTP status: ${HTTP_CODE}"
-
-if [[ ! "${HTTP_CODE}" =~ ^[1-4][0-9][0-9]$ ]]; then
+if ! wait_for_nginx_traffic; then
     echo "Nginx traffic verification failed."
 
     if ! rollback; then
@@ -288,13 +375,16 @@ fi
 
 echo "Target environment verification successful."
 
+# Connection Draining
 if [ "${HAS_BEFORE_ENV}" = true ]; then
     echo "Connection Draining: ${DRAIN_SECONDS}s"
     sleep "${DRAIN_SECONDS}"
 
     echo "Stop ${BEFORE} Environment"
 
-    docker compose -f "${COMPOSE_FILE}" stop "${BEFORE_SERVICES[@]}"
+    docker compose -f "${COMPOSE_FILE}" stop \
+        "${BEFORE_SERVICES[@]}"
+
 else
     echo "No previous environment to stop."
 fi
