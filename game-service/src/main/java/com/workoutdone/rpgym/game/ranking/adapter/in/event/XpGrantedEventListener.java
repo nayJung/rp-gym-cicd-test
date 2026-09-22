@@ -5,8 +5,6 @@ import com.workoutdone.rpgym.game.xp.application.XpGranted;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -30,7 +28,6 @@ public class XpGrantedEventListener {
      * 기본 전파(REQUIRED)로 두면 이미 커밋된 트랜잭션에 합류해 upsertLevel() 이 조용히 유실된다.
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void on(XpGranted event) {
         try {
             rankingService.onXpChanged(event.userId());
