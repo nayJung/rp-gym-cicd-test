@@ -1,0 +1,166 @@
+{
+  "uid": "rpgym-health-outbox",
+  "title": "RP-Gym Health Outbox",
+  "tags": ["rpgym", "health-service", "outbox"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "이벤트 발행량 (건/초)",
+      "description": "result=success/failure 별 발행 처리율",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (result) (rate(rpgym_outbox_publish_total[1m]))",
+          "legendFormat": "{{result}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "ops", "custom": { "fillOpacity": 10 } },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "발행 실패율 (5분)",
+      "description": "0.05(5%)를 넘으면 Kafka 연결 또는 페이로드 문제를 의심한다.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(rpgym_outbox_publish_total{result=\"failure\"}[5m])) / clamp_min(sum(rate(rpgym_outbox_publish_total[5m])), 0.0001)",
+          "legendFormat": "실패율"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "decimals": 2,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 0.01 },
+              { "color": "red", "value": 0.05 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "발행 지연 (적재 → 발행)",
+      "description": "이벤트가 event_outbox에 쌓인 시점부터 Kafka 발행 성공까지 걸린 시간",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(rpgym_outbox_lag_seconds_bucket[5m])))",
+          "legendFormat": "p99"
+        },
+        {
+          "refId": "B",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(rpgym_outbox_lag_seconds_bucket[5m])))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "s", "custom": { "fillOpacity": 0 } },
+        "overrides": []
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "적체 건수",
+      "description": "pending이 계속 우상향하면 발행이 적재 속도를 못 따라가는 것이다.",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rpgym_outbox_pending_count",
+          "legendFormat": "미발행(PENDING)"
+        },
+        {
+          "refId": "B",
+          "expr": "rpgym_outbox_failed_count",
+          "legendFormat": "실패(FAILED)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } },
+        "overrides": []
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "발행 소요 시간 p99",
+      "description": "Kafka send 자체에 걸린 시간. 지연(p99)과 함께 보면 병목이 DB인지 Kafka인지 구분된다.",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "histogram_quantile(0.99, sum by (le) (rate(rpgym_outbox_publish_duration_seconds_bucket[5m])))",
+          "legendFormat": "p99"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "DLQ 이동 누적 (24h)",
+      "description": "max-retry(5회)를 모두 소진해 DLQ로 보낸 이벤트. 0이 아니면 반드시 원인 확인이 필요하다.",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(rpgym_outbox_dlq_total[24h]))",
+          "legendFormat": "DLQ"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 1 }
+            ]
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "정리 배치 삭제 건수 (24h)",
+      "description": "매일 04:10 실행. 0이 계속되면 배치가 동작하지 않는 것이다.",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(increase(rpgym_outbox_cleanup_deleted_total[24h]))",
+          "legendFormat": "삭제"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": { "unit": "short", "decimals": 0 },
+        "overrides": []
+      }
+    }
+  ]
+}

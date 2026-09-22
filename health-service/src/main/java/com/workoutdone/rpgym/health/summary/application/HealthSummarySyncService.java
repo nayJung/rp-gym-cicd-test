@@ -8,6 +8,9 @@ import com.workoutdone.rpgym.health.summary.domain.DailyGoalProgressRepository;
 import com.workoutdone.rpgym.health.summary.domain.DailyHealthSummary;
 import com.workoutdone.rpgym.health.summary.domain.DailyHealthSummaryRepository;
 import com.workoutdone.rpgym.health.summary.domain.MetricType;
+import com.workoutdone.rpgym.health.outbox.application.EventOutboxPort;
+import com.workoutdone.rpgym.health.outbox.domain.HealthEventType;
+import com.workoutdone.rpgym.health.summary.application.event.DailyGoalCompletedPayload;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -33,6 +36,7 @@ public class HealthSummarySyncService {
     private final DailyGoalProgressRepository progressRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final UserServiceClient userServiceClient;
+    private final EventOutboxPort eventOutboxPort;
 
     private static final BigDecimal DEFAULT_STEP_GOAL = BigDecimal.valueOf(5000);
     private static final BigDecimal DEFAULT_ACTIVE_MINUTES_GOAL = BigDecimal.valueOf(60);
@@ -84,10 +88,11 @@ public class HealthSummarySyncService {
         boolean allAchieved = !progresses.isEmpty()
                 && progresses.stream().allMatch(DailyGoalProgress::isAchieved);
         if (allAchieved) {
-            // TODO(#63 이전 논의): newlyAchieved == true 일 때 DAILY_GOAL_COMPLETED를 Outbox에 적재한다.
-            //            Game Service 업적·보상 연동과 함께 트러블슈팅 기간에 구현하기로 팀 합의.
-            summary.markAllGoalsAchieved(now);
+            boolean newlyAchieved = summary.markAllGoalsAchieved(now);
             summaryRepository.save(summary);
+            if (newlyAchieved) {
+                publishDailyGoalCompletedEvent(summary, syncedActivity.activityId());
+            }
         } else {
             publishDeficientGoalEventIfNeeded(summary, syncedActivity.activityId(), progresses, now);
         }
@@ -117,6 +122,26 @@ public class HealthSummarySyncService {
                 progress.getMetricType().name(),
                 progress.getShortageValue().intValue()
         )));
+    }
+
+    private void publishDailyGoalCompletedEvent(DailyHealthSummary summary, UUID activityId) {
+        UUID eventId = UUID.randomUUID();
+        String dedupKey = "DAILY_GOAL_COMPLETED:%s:%s".formatted(summary.getUserId(), summary.getActivityDate());
+
+        DailyGoalCompletedPayload payload = new DailyGoalCompletedPayload(
+                summary.getSummaryId(),
+                summary.getActivityDate(),
+                summary.getAchievedAt()
+        );
+
+        eventOutboxPort.append(
+                eventId,
+                HealthEventType.DAILY_GOAL_COMPLETED,
+                summary.getUserId(),
+                activityId,
+                dedupKey,
+                payload
+        );
     }
 
     private BigDecimal achievementDeficitRatio(DailyGoalProgress progress) {

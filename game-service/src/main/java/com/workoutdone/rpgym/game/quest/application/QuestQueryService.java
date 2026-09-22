@@ -11,7 +11,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 /**
- * 읽기 전용. 쓰기(QuestProgressService)와 나눈 이유는 XpGrantService/XpQueryService와 같다 --
+ * 읽기 전용. 쓰기(QuestProgressService)와 나눈 이유는 XpGrantService/XpQueryService와 같다
  * 쓰기는 트랜잭션에 합류하고 멱등키를 다루지만, 읽기는 readOnly 조회다.
  * 한 서비스에 합치면 조회하려고 주입한 빈에 판정·지급 메서드가 노출된다.
  */
