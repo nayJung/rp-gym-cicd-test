@@ -1,12 +1,27 @@
 package com.workoutdone.rpgym.game.quest.application;
 
+// 제안을 받아서 보관하는 경로의 결과다.
+// 이 경로는 Kafka 컨슈머가 부르므로 실패를 예외로 던지면 안 된다.
+// 예외가 컨슈머 밖으로 나가면 오프셋이 커밋되지 않고 같은 메시지를 무한히 다시 처리하는데,
+// 아래 실패들은 몇 번을 다시 해도 같은 결과라 그 파티션이 영원히 멈춘다.
+// 그래서 결과를 값으로 돌려주고 컨슈머는 그냥 정상 종료한다.
+// 값 목록이 예전보다 짧아졌다.
+// 스냅샷 대조와 동시 활성 검사는 저장 시점이 아니라 수락 시점에 답해야 하는 질문이라
+// 수락 경로로 옮겨갔다.
+// 여기 남은 것은 "이 제안을 사람에게 보여줄 수 있는가" 만 판단한다.
 public enum SuggestionOutcome {
-    CREATED,
+
+    // 저장했고 알림용 이벤트도 아웃박스에 적재했다.
+    STORED,
+
+    // 같은 제안이 이미 저장돼 있다.
+    // 카프카가 적어도 한 번은 배달한다는 보장으로 돌아가므로 재배달은 정상 동작이다.
+    // 로그를 에러로 남기면 시연 중에 화면이 빨개지고 진짜 계약 위반과 구분이 안 된다.
     DUPLICATE_SUGGESTION,
-    ALREADY_ACTIVE,
+
+    // metric 문자열이 세 종류 밖이다. 만들 수 없는 퀘스트를 카드로 띄우면 안 되므로 여기서 버린다.
     UNKNOWN_METRIC,
-    INVALID_TARGET,
-    SNAPSHOT_MISSING,
-    SNAPSHOT_MISMATCH,
-    DATE_MISMATCH
+
+    // 목표값이 0 이하다. 그대로 두면 수락하자마자 완료되어 공짜로 XP 가 나간다.
+    INVALID_TARGET
 }
