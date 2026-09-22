@@ -15,12 +15,6 @@ on:
       - "docs/**"
       - ".github/ISSUE_TEMPLATE/**"
 
-# 같은 브랜치에서 새로운 커밋이 올라오면
-# 이전 CI/CD를 취소하여 불필요한 리소스 사용을 방지
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 # GitHub Repository 내용을 읽기만 할 수 있도록 권한 제한
 permissions:
   contents: read
@@ -32,6 +26,12 @@ jobs:
 
     # GitHub Actions에서 제공하는 Ubuntu 환경에서 실행
     runs-on: ubuntu-latest
+
+    # 같은 브랜치에 새로운 커밋이 올라오면
+    # 이전 CI를 취소하고 최신 커밋 기준으로 다시 검증
+    concurrency:
+      group: ci-${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
 
     # CI가 15분 이상 실행되면 강제 종료
     timeout-minutes: 15
@@ -235,6 +235,11 @@ jobs:
 
     runs-on: ubuntu-latest
 
+    # main에 연속으로 push된 경우에도 동시 실행 방지
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
+
     # CD가 15분 이상 실행되면 강제 종료
     timeout-minutes: 15
 
@@ -274,17 +279,34 @@ jobs:
           GRAFANA_ROOT_URL: ${{ secrets.GRAFANA_ROOT_URL }}
         run: |
           ENV_FILE="$(mktemp)"
-
           trap 'rm -f "$ENV_FILE"' EXIT
 
-          {
-            printf 'JWT_SECRET=%s\n' "$JWT_SECRET"
-            printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
-            printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY"
-            printf 'ZIPKIN_UI_USER=%s\n' "$ZIPKIN_UI_USER"
-            printf "ZIPKIN_UI_PASSWORD_HASH='%s'\n" "$ZIPKIN_UI_PASSWORD_HASH"
-            printf 'GRAFANA_ROOT_URL=%s\n' "$GRAFANA_ROOT_URL"
-          } > "$ENV_FILE"
+          VARS=(
+            JWT_SECRET
+            POSTGRES_PASSWORD
+            GEMINI_API_KEY
+            ZIPKIN_UI_USER
+            ZIPKIN_UI_PASSWORD_HASH
+            GRAFANA_ROOT_URL
+          )
+
+          # 필수 Secret 누락 및 작은따옴표 포함 여부 검증
+          for VAR in "${VARS[@]}"; do
+            if [ -z "${!VAR}" ]; then
+              echo "::error::Secret ${VAR} is empty"
+              exit 1
+            fi
+
+            if [[ "${!VAR}" == *"'"* ]]; then
+              echo "::error::Secret ${VAR} must not contain single quotes"
+              exit 1
+            fi
+          done
+
+          # Compose의 변수 치환을 방지하기 위해 값을 작은따옴표로 감싸서 저장
+          for VAR in "${VARS[@]}"; do
+            printf "%s='%s'\n" "$VAR" "${!VAR}"
+          done > "$ENV_FILE"
 
           scp \
             -i ~/.ssh/ec2.pem \
