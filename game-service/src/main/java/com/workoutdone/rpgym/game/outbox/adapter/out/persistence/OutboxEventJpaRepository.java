@@ -18,7 +18,8 @@ import java.util.UUID;
 public interface OutboxEventJpaRepository extends JpaRepository<OutboxEvent, UUID> {
 
     /**
-     * idx_outbox_events_status (status, created_at)를 그대로 탄다.
+     * idx_outbox_events_pending (created_at) WHERE status = 'PENDING' 을 탄다. (V9)
+     * 부분 인덱스라 PUBLISHED 가 아무리 쌓여도 인덱스는 PENDING 수에만 비례한다.
      *
      * PESSIMISTIC_WRITE            -> SELECT ... FOR UPDATE
      * lock.timeout = -2            -> SKIP LOCKED (Hibernate LockOptions.SKIP_LOCKED)
