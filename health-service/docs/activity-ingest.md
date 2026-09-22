@@ -57,5 +57,6 @@ health-service에 앱 전용 인증 코드를 추가할 필요가 없다.
 
 ## 시연
 - Synthetic 수집기: 주기적으로 누적값이 쌓이고 목표 달성 시 퀘스트가 생성되는 흐름
-- Postman: 로그인 토큰으로 `HEALTH_CONNECT` 요청을 게이트웨이를 거쳐 보내 같은 흐름으로 이어지는 것, `SYNTHETIC` 요청이 400으로 거부되는 것
-- Postman 시연용 사용자는 `rpgym.synthetic.user-ids`에서 제외한다 (누적값이 섞이지 않도록)
+- Postman: 로그인 토큰으로 `HEALTH_CONNECT` 요청을 게이트웨이를 거쳐 보내 같은 흐름으로 이어지는 것(04, 06), `SYNTHETIC` 요청이 400으로 거부되는 것(04-1)
+- Swagger UI: 같은 요청을 브라우저에서 직접 보내 확인한다. 게이트웨이를 거치므로 로그인으로 받은 JWT를 Authorize에 입력한 뒤 호출한다
+- Postman·Swagger 시연용 사용자는 `rpgym.synthetic.user-ids`에서 제외한다 (누적값이 섞이지 않도록)
