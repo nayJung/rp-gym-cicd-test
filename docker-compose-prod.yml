@@ -421,6 +421,7 @@ services:
       EUREKA_INSTANCE_HOSTNAME: health-service-blue
       EUREKA_SERVER_URL: http://eureka-server-blue:19000/eureka/
       EUREKA_PREFER_IP_ADDRESS: "false"
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
 
       ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
 
@@ -458,6 +459,7 @@ services:
       EUREKA_INSTANCE_HOSTNAME: health-service-green
       EUREKA_SERVER_URL: http://eureka-server-green:19000/eureka/
       EUREKA_PREFER_IP_ADDRESS: "false"
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
 
       ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
 
