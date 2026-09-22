@@ -30,7 +30,6 @@ public class XpGrantedEventListener {
      * 기본 전파(REQUIRED)로 두면 이미 커밋된 트랜잭션에 합류해 upsertLevel() 이 조용히 유실된다.
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void on(XpGranted event) {
         try {
             rankingService.onXpChanged(event.userId());
