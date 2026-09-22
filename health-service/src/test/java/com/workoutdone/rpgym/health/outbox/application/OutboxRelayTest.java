@@ -54,9 +54,9 @@ class OutboxRelayTest {
 
     @BeforeEach
     void setUp() {
-        // 순서: pollSize, maxRetry, sendTimeout, topic, dlqSuffix
+        // 순서: pollSize, maxRetry, sendTimeout, topic, dailyGoalTopic, dlqSuffix
         OutboxPublishProperties properties = new OutboxPublishProperties(
-                100, MAX_RETRY, Duration.ofSeconds(5), TOPIC, ".dlq");
+                100, MAX_RETRY, Duration.ofSeconds(5), TOPIC, "health.daily-goal.events", ".dlq");
 
         meterRegistry = new SimpleMeterRegistry();
 
