@@ -15,12 +15,6 @@ on:
       - "docs/**"
       - ".github/ISSUE_TEMPLATE/**"
 
-# 같은 브랜치에서 새로운 커밋이 올라오면
-# 이전 CI/CD를 취소하여 불필요한 리소스 사용을 방지
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 # GitHub Repository 내용을 읽기만 할 수 있도록 권한 제한
 permissions:
   contents: read
@@ -33,6 +27,12 @@ jobs:
     # GitHub Actions에서 제공하는 Ubuntu 환경에서 실행
     runs-on: ubuntu-latest
 
+    # 같은 브랜치에 새로운 커밋이 올라오면
+    # 이전 CI를 취소하고 최신 커밋 기준으로 다시 검증
+    concurrency:
+      group: ci-${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
+
     # CI가 15분 이상 실행되면 강제 종료
     timeout-minutes: 15
 
@@ -43,6 +43,11 @@ jobs:
         with:
           # 변경된 파일을 비교하기 위해 전체 Git 히스토리를 가져옴
           fetch-depth: 0
+
+      # Docker Compose 설정 검증
+      # Gradle 모듈 변경 여부와 관계없이 Compose 문법 오류를 검사
+      - name: Validate Docker Compose
+        run: docker compose -f docker-compose-prod.yml config -q
 
       # Java 환경 설정
       - name: Set up JDK 17
@@ -216,6 +221,7 @@ jobs:
             health-service/build/libs/health-service.jar
             game-service/build/libs/game-service.jar
             notification-service/build/libs/notification-service.jar
+          retention-days: 7
 
   # CD
   deploy:
@@ -228,6 +234,11 @@ jobs:
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
 
     runs-on: ubuntu-latest
+
+    # main에 연속으로 push된 경우에도 동시 실행 방지
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
 
     # CD가 15분 이상 실행되면 강제 종료
     timeout-minutes: 15
@@ -255,6 +266,57 @@ jobs:
           chmod 600 ~/.ssh/ec2.pem
 
           ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+
+      # GitHub Secrets로 EC2 .env 생성
+      - name: Create EC2 environment file
+        shell: bash
+        env:
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ZIPKIN_UI_USER: ${{ secrets.ZIPKIN_UI_USER }}
+          ZIPKIN_UI_PASSWORD_HASH: ${{ secrets.ZIPKIN_UI_PASSWORD_HASH }}
+          GRAFANA_ROOT_URL: ${{ secrets.GRAFANA_ROOT_URL }}
+        run: |
+          ENV_FILE="$(mktemp)"
+          trap 'rm -f "$ENV_FILE"' EXIT
+
+          VARS=(
+            JWT_SECRET
+            POSTGRES_PASSWORD
+            GEMINI_API_KEY
+            ZIPKIN_UI_USER
+            ZIPKIN_UI_PASSWORD_HASH
+            GRAFANA_ROOT_URL
+          )
+
+          # 필수 Secret 누락 및 작은따옴표 포함 여부 검증
+          for VAR in "${VARS[@]}"; do
+            if [ -z "${!VAR}" ]; then
+              echo "::error::Secret ${VAR} is empty"
+              exit 1
+            fi
+
+            if [[ "${!VAR}" == *"'"* ]]; then
+              echo "::error::Secret ${VAR} must not contain single quotes"
+              exit 1
+            fi
+          done
+
+          # Compose의 변수 치환을 방지하기 위해 값을 작은따옴표로 감싸서 저장
+          for VAR in "${VARS[@]}"; do
+            printf "%s='%s'\n" "$VAR" "${!VAR}"
+          done > "$ENV_FILE"
+
+          scp \
+            -i ~/.ssh/ec2.pem \
+            "$ENV_FILE" \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/.env
+
+          ssh \
+            -i ~/.ssh/ec2.pem \
+            ubuntu@${{ secrets.EC2_HOST }} \
+            "chmod 600 /home/ubuntu/rp-gym/.env"
 
       # EC2 연결 확인
       - name: Check EC2 connection
@@ -286,6 +348,66 @@ jobs:
 
           echo "Target environment: ${TARGET}"
           echo "target=${TARGET}" >> "$GITHUB_OUTPUT"
+
+      # 배포에 필요한 인프라 설정 파일 전달
+      # service-url.inc는 deploy.sh가 현재 Blue/Green 상태를 관리하므로 전송하지 않음
+      # TO DO: Grafana alerting 설정은 별도 모니터링 작업에서 반영
+      - name: Upload Deployment Configuration
+        run: |
+          ssh \
+            -i ~/.ssh/ec2.pem \
+            ubuntu@${{ secrets.EC2_HOST }} \
+            "mkdir -p /home/ubuntu/rp-gym/nginx/docker-entrypoint.d \
+                      /home/ubuntu/rp-gym/monitoring/prometheus \
+                      /home/ubuntu/rp-gym/monitoring/loki \
+                      /home/ubuntu/rp-gym/monitoring/alloy \
+                      /home/ubuntu/rp-gym/monitoring/grafana/provisioning/datasources \
+                      /home/ubuntu/rp-gym/monitoring/grafana/provisioning/dashboards"
+
+          scp \
+            -i ~/.ssh/ec2.pem \
+            docker-compose-prod.yml \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/docker-compose-prod.yml
+
+          scp \
+            -i ~/.ssh/ec2.pem \
+            nginx/nginx.conf \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/nginx/nginx.conf
+
+          scp \
+            -i ~/.ssh/ec2.pem \
+            nginx/docker-entrypoint.d/40-zipkin-htpasswd.sh \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/nginx/docker-entrypoint.d/40-zipkin-htpasswd.sh
+
+          scp \
+            -i ~/.ssh/ec2.pem \
+            monitoring/prometheus/prometheus-prod.yml \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/monitoring/prometheus/prometheus-prod.yml
+
+          scp \
+            -i ~/.ssh/ec2.pem \
+            monitoring/loki/loki-config.yml \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/monitoring/loki/loki-config.yml
+
+          scp \
+            -i ~/.ssh/ec2.pem \
+            monitoring/alloy/config.alloy \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/monitoring/alloy/config.alloy
+
+          scp -r \
+            -i ~/.ssh/ec2.pem \
+            monitoring/grafana/provisioning/datasources \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/monitoring/grafana/provisioning/
+
+          scp -r \
+            -i ~/.ssh/ec2.pem \
+            monitoring/grafana/provisioning/dashboards \
+            ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu/rp-gym/monitoring/grafana/provisioning/
+
+          ssh \
+            -i ~/.ssh/ec2.pem \
+            ubuntu@${{ secrets.EC2_HOST }} \
+            "chmod +x /home/ubuntu/rp-gym/nginx/docker-entrypoint.d/40-zipkin-htpasswd.sh"
 
       # 배포 대상 환경에 JAR 전달
       - name: Upload Application JARs
