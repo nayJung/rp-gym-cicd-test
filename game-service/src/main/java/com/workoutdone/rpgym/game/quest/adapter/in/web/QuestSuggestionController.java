@@ -25,7 +25,7 @@ import java.util.UUID;
 // 예외를 던지면 트랜잭션이 롤백되면서 그 상태 변경이 통째로 사라진다.
 // 그래서 서비스가 결과를 값으로 돌려주고, 그 값을 상태 코드로 옮기는 일만 여기서 한다.
 @RestController
-@RequestMapping("/api/v2/games/quest-suggestions")
+@RequestMapping("/api/v2/games/internal/quest-suggestions")
 @RequiredArgsConstructor
 public class QuestSuggestionController {
 
