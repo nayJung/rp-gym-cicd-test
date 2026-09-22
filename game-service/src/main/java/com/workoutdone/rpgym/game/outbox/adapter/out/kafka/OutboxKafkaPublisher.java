@@ -16,6 +16,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 @Slf4j
+// T1 트랜잭션 끝난후 outbox에 저장된 데이터를 를 외부로 polling
 @Component
 @RequiredArgsConstructor
 public class OutboxKafkaPublisher implements EventPublisherPort {
