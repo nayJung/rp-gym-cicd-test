@@ -4,13 +4,19 @@
 수집 채널이 달라도 저장·멱등 처리·Outbox 적재·일일 목표 갱신은 하나의 유스케이스가 담당한다.
 
 ```
-[Synthetic 수집기]  ──(내부 호출)──────────────────────────┐
-  SyntheticActivityScheduler                              ▼
-                                                 HealthActivitySyncUseCase
-[Android 앱 (Health Connect)]                     (저장 / 멱등 / Outbox / 진행도)
-  → Gateway (JWT 검증, X-User-Id 재주입)                  ▲
-  → POST /api/v1/health-activities/sync ──(검증·변환)─────┘
-     HealthActivityController
+[Synthetic 수집기] SyntheticActivityScheduler
+        │ 내부 호출
+        ▼
+HealthActivitySyncUseCase (저장 / 멱등 / Outbox / 진행도)
+        ▲
+        │ 검증·변환
+POST /api/v1/health-activities/sync (HealthActivityController)
+        ▲
+Gateway (JWT 검증, X-User-Id 재주입)
+        ▲
+Android 앱 (사용자가 권한을 허용하면 Health Connect에서 읽어 전송)
+        ▲
+[Health Connect] 기기 내 건강 데이터 보관함 (삼성 헬스 등이 기록)
 ```
 
 - 인바운드 포트: `HealthActivitySyncUseCase`
@@ -21,8 +27,8 @@
 | 값 | 경로 | 외부 요청 허용 |
 |---|---|---|
 | `SYNTHETIC` | 서버 내부 수집기 | ❌ (400) |
-| `HEALTH_CONNECT` | 앱 → Health Connect → 서버 | ✅ 기본 외부 채널 |
-| `SAMSUNG_HEALTH` | Samsung Health Data SDK 직접 연동 (예약, 미사용) | ✅ |
+| `HEALTH_CONNECT` | 앱이 기기의 Health Connect에서 읽어 서버로 전송 | ✅ 기본 외부 채널 |
+| `SAMSUNG_HEALTH` | Samsung Health Data SDK 직접 연동 (예약, 미연동) | ❌ (400) |
 
 ### Health Connect를 기본 채널로 정한 이유
 - 제조사 중립: 삼성 헬스·Fitbit 등 여러 앱의 데이터를 한 곳에서 읽는다. 수집 채널을 추상화한 설계 의도와 맞는다.
