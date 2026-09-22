@@ -69,7 +69,7 @@ class HealthActivityControllerTest {
 
     @Test
     @DisplayName("POST /sync — 신규 저장이면 201")
-    void sync_신규() throws Exception {
+    void sync_newSnapshot_returns201() throws Exception {
         given(healthActivitySyncUseCase.sync(any()))
                 .willReturn(new HealthActivitySyncResult(view(), true));
 
@@ -84,7 +84,7 @@ class HealthActivityControllerTest {
 
     @Test
     @DisplayName("POST /sync — 이미 있는 시점이면 200")
-    void sync_기존() throws Exception {
+    void sync_existingMeasuredAt_returns200() throws Exception {
         given(healthActivitySyncUseCase.sync(any()))
                 .willReturn(new HealthActivitySyncResult(view(), false));
 
@@ -97,7 +97,7 @@ class HealthActivityControllerTest {
 
     @Test
     @DisplayName("POST /sync — 음수 지표는 400 INVALID_INPUT")
-    void sync_음수() throws Exception {
+    void sync_negativeMetric_returns400() throws Exception {
         mockMvc.perform(post("/api/v1/health-activities/sync")
                         .header("X-User-Id", userId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -109,7 +109,7 @@ class HealthActivityControllerTest {
 
     @Test
     @DisplayName("X-User-Id 헤더가 없으면 401 UNAUTHORIZED")
-    void 헤더_누락() throws Exception {
+    void missingUserIdHeader_returns401() throws Exception {
         mockMvc.perform(get("/api/v1/health-activities/today"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHORIZED"));
@@ -117,7 +117,7 @@ class HealthActivityControllerTest {
 
     @Test
     @DisplayName("GET /today — 이력이 없어도 200 + 0값")
-    void today_이력없음() throws Exception {
+    void getToday_noHistory_returns200WithZeroValues() throws Exception {
         given(healthActivityQueryUseCase.getToday(any()))
                 .willReturn(HealthActivityView.empty(userId, LocalDate.of(2026, 8, 28)));
 
@@ -130,7 +130,7 @@ class HealthActivityControllerTest {
 
     @Test
     @DisplayName("POST /sync — HEALTH_CONNECT 출처는 받아서 유스케이스로 넘긴다")
-    void sync_헬스커넥트() throws Exception {
+    void sync_healthConnectSource_passesToUseCase() throws Exception {
         given(healthActivitySyncUseCase.sync(any()))
                 .willReturn(new HealthActivitySyncResult(view(), true));
 
@@ -148,7 +148,7 @@ class HealthActivityControllerTest {
 
     @Test
     @DisplayName("POST /sync — SYNTHETIC 출처는 외부 요청으로 받지 않는다 (400)")
-    void sync_외부_SYNTHETIC_거부() throws Exception {
+    void sync_syntheticSourceFromClient_returns400() throws Exception {
         mockMvc.perform(post("/api/v1/health-activities/sync")
                         .header("X-User-Id", userId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
@@ -162,7 +162,7 @@ class HealthActivityControllerTest {
 
     @Test
     @DisplayName("POST /sync — 허용 오차를 넘는 미래 측정 시점은 400")
-    void sync_미래시점_거부() throws Exception {
+    void sync_futureMeasuredAtBeyondTolerance_returns400() throws Exception {
         String future = Instant.now().plus(1, ChronoUnit.HOURS).toString();
 
         mockMvc.perform(post("/api/v1/health-activities/sync")
@@ -178,7 +178,7 @@ class HealthActivityControllerTest {
 
     @Test
     @DisplayName("POST /sync — measuredAt의 밀리초는 초 단위로 절삭되어 넘어간다")
-    void sync_초단위_절삭() throws Exception {
+    void sync_measuredAtWithMillis_truncatedToSeconds() throws Exception {
         given(healthActivitySyncUseCase.sync(any()))
                 .willReturn(new HealthActivitySyncResult(view(), true));
 
