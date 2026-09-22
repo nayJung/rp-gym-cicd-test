@@ -21,6 +21,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
     implementation 'org.springframework.cloud:spring-cloud-starter-netflix-eureka-client'
+    // 파티 알림 이벤트를 notification-service 로 직접 밀어 넣는다(#122). health-service 와 같은 방식.
+    implementation 'org.springframework.cloud:spring-cloud-starter-openfeign'
 
     // ── 영속 ───────────────────────────────────────────────────────────
     // quests / xp_ledgers / wallets / outbox_events. 멱등성을 DB 유니크 제약으로 강제하므로

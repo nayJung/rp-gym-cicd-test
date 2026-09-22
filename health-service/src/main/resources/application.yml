@@ -161,3 +161,18 @@ management:
   zipkin:
     tracing:
       endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
+
+  metrics:
+    distribution:
+      # Timer의 분위수(p95/p99)를 Grafana에서 계산하려면 버킷 시계열이 필요하다.
+      # 켜지 않으면 sum/count/max만 노출되어 histogram_quantile을 쓸 수 없다.
+      percentiles-histogram:
+        rpgym.outbox.lag: true
+        rpgym.outbox.publish.duration: true
+      # 버킷 개수를 제한해 카디널리티 증가를 억제한다.
+      minimum-expected-value:
+        rpgym.outbox.lag: 10ms
+        rpgym.outbox.publish.duration: 1ms
+      maximum-expected-value:
+        rpgym.outbox.lag: 30s
+        rpgym.outbox.publish.duration: 10s
