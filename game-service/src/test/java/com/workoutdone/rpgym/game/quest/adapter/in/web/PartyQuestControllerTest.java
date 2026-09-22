@@ -47,9 +47,8 @@ class PartyQuestControllerTest {
     private PartyQuestCreateService partyQuestCreateService;
 
     private String body() throws Exception {
-        return objectMapper.writeValueAsString(new CreatePartyQuestRequest(
-                PARTY_ID, "퇴근길 함께 4000보", "STEPS", 4000,
-                List.of(OWNER, UUID.randomUUID())));
+        return objectMapper.writeValueAsString(
+                new CreatePartyQuestRequest(PARTY_ID, "퇴근길 함께 4000보", 4000));
     }
 
     private static PartyQuestView view() {
@@ -86,20 +85,46 @@ class PartyQuestControllerTest {
     }
 
     @Test
-    @DisplayName("인원이 올바르지 않으면 400이다")
-    void 인원이_틀리면_400이다() throws Exception {
+    @DisplayName("파티 인원이 올바르지 않으면 409다 — 요청이 아니라 파티 쪽 상태가 문제다")
+    void 파티_인원이_틀리면_409다() throws Exception {
         givenFails(PartyQuestCreation.Reason.INVALID_MEMBERS);
 
         mockMvc.perform(post(URL)
                         .header("X-User-Id", OWNER.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body()))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("INVALID_PARTY_MEMBERS"));
     }
 
     @Test
-    @DisplayName("명단에 없는 사람이 요청하면 403이다")
+    @DisplayName("파티장이 아니면 403이다")
+    void 파티장이_아니면_403이다() throws Exception {
+        givenFails(PartyQuestCreation.Reason.NOT_OWNER);
+
+        mockMvc.perform(post(URL)
+                        .header("X-User-Id", OWNER.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("NOT_PARTY_OWNER"));
+    }
+
+    @Test
+    @DisplayName("파티가 진행 중이 아니면 409다 — 모집이 끝나면 같은 요청이 그대로 성공한다")
+    void 파티가_진행_중이_아니면_409다() throws Exception {
+        givenFails(PartyQuestCreation.Reason.PARTY_NOT_ACTIVE);
+
+        mockMvc.perform(post(URL)
+                        .header("X-User-Id", OWNER.toString())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("PARTY_NOT_ACTIVE"));
+    }
+
+    @Test
+    @DisplayName("자기 파티가 아니면 403이다")
     void 남의_파티면_403이다() throws Exception {
         givenFails(PartyQuestCreation.Reason.NOT_A_MEMBER);
 
