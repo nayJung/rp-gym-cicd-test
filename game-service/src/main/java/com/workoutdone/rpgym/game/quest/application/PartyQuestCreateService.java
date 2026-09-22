@@ -1,6 +1,5 @@
 package com.workoutdone.rpgym.game.quest.application;
 
-import com.workoutdone.rpgym.game.party.application.PartyException;
 import com.workoutdone.rpgym.game.party.application.PartyQueryService;
 import com.workoutdone.rpgym.game.party.application.view.PartyView;
 import com.workoutdone.rpgym.game.party.domain.PartyStatus;
@@ -59,15 +58,15 @@ public class PartyQuestCreateService {
         // 이벤트를 처리할 때 측정 시각을 쓰는 것과 기준 시각의 성격이 다르다.
         Instant now = Instant.now();
 
-        // 인가가 먼저다. 입력값 검사를 앞에 두면 남의 파티에 대고 어떤 값이 올바른지를 알아낼 수 있다.
-        // 파티 컨텍스트와는 application 의 서비스로만 붙는다. 그쪽 리포지토리를 직접 주입하지 않는다.
-        PartyView party;
-        try {
-            party = partyQueryService.getMyParty(command.requesterId());
-        } catch (PartyException e) {
-            // 소속된 파티가 아예 없는 경우다. 1인 1파티라 이 조회 하나로 소속이 결정된다.
-            return failed(PartyQuestCreation.Reason.NOT_A_MEMBER, command);
-        }
+        // 인가가 먼저다. 입력값 검사를 앞에 두면 다른 파티에 대조할때 어떤 값이 올바른지를 알아낼 수 있다.
+        // 파티 컨텍스트와는 application 의 서비스로만 붙는다. 다른 당담자의 리포지토리를 직접 주입하지 않는다.
+        // 다른쪽 레포를 건드려도 되는데 내가 만들어야하므로 그냥 안했다.
+        // 소속된 파티가 없으면 이 호출이 예외를 던진다. 잡지 않는다.
+        // 저 메서드는 전파가 REQUIRED 라 내 트랜잭션에 참여만 하고, 거기서 예외는
+        // 다른(다른사람이 짠) 트랜잭션이라 스스로 롤백하지 못하고 롤백 전용 플래그만 세운다.
+        // 여기서 잡아 실패 결과로 돌려주면 플래그는 그대로 남아 커밋 시점에 UnexpectedRollbackException 이 난다.
+        // 그대로 올려보내면 공용 예외 핸들러가 파티 쪽 에러코드로 응답한다. 쓴 것이 없으니 롤백도 무해하다.
+        PartyView party = partyQueryService.getMyParty(command.requesterId());
         if (!party.partyId().equals(command.partyId())) {
             return failed(PartyQuestCreation.Reason.NOT_A_MEMBER, command);
         }
