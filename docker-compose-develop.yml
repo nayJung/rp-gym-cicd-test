@@ -61,8 +61,6 @@ services:
     networks:
       - app-network
 
-  # postgres-notification: 인프라 담당자가 추후 별도로 추가 예정
-
   # kafka
   kafka:
     image: apache/kafka:4.3.1
