@@ -1,8 +1,12 @@
 package com.workoutdone.rpgym.game.quest.application;
 
+import com.workoutdone.rpgym.game.outbox.application.OutboxRecorder;
+import com.workoutdone.rpgym.game.outbox.domain.AggregateType;
+import com.workoutdone.rpgym.game.outbox.domain.OutboxEventType;
 import com.workoutdone.rpgym.game.party.application.PartyQueryService;
 import com.workoutdone.rpgym.game.party.application.view.PartyView;
 import com.workoutdone.rpgym.game.party.domain.PartyStatus;
+import com.workoutdone.rpgym.game.quest.application.payload.PartyQuestCreatedData;
 import com.workoutdone.rpgym.game.quest.domain.Metric;
 import com.workoutdone.rpgym.game.quest.domain.aggregate.PartyQuest;
 import com.workoutdone.rpgym.game.quest.domain.aggregate.PartyQuestMember;
@@ -51,6 +55,7 @@ public class PartyQuestCreateService {
     private final UserLatestSnapshotRepository userLatestSnapshotRepository;
     private final PartyQueryService partyQueryService;
     private final RewardPolicy rewardPolicy;
+    private final OutboxRecorder outboxRecorder;
 
     @Transactional
     public PartyQuestCreation create(PartyQuestCreateCommand command) {
@@ -143,6 +148,19 @@ public class PartyQuestCreateService {
 
         List<PartyQuestMember> members = partyQuestMemberRepository.saveAll(
                 enroll(partyQuest.getPartyQuestId(), memberIds, metric));
+
+        // 파티장은 이 요청의 응답으로 결과를 받지만 나머지 멤버는 시작을 알 방법이 없다.
+        // 봉투의 userId 로 파티장을 쓴다. 이 값이 발행 파티션을 정하는데,
+        // 생성 직후에는 기여가 전원 0 이라 완료 이벤트와 순서가 엇갈릴 상황이 없다.
+        // 누구에게 알릴지는 본문의 명단이 들고 있다.
+        outboxRecorder.append(
+                AggregateType.PARTY_QUEST,
+                partyQuest.getPartyQuestId(),
+                OutboxEventType.PARTY_QUEST_CREATED,
+                command.requesterId(),
+                now,
+                PartyQuestCreatedData.from(partyQuest, command.requesterId(), members)
+        );
 
         log.info("파티 퀘스트 생성. partyQuestId={} partyId={} metric={} target={} 멤버={}명 기한={}",
                 partyQuest.getPartyQuestId(), partyQuest.getPartyId(), partyQuest.getMetric(),
