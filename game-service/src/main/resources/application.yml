@@ -76,6 +76,17 @@ spring:
       # 발행 구간도 같은 trace에 이어 붙는다
       observation-enabled: true
 
+  # 파티 알림 이벤트를 notification-service 로 밀어 넣는 Feign(#122).
+  # 릴레이가 실패 시 라운드를 멈추므로 타임아웃이 길면 뒤 이벤트가 통째로 밀린다.
+  # 카프카 발행의 send-timeout(5s)과 같은 기준으로 맞춘다.
+  cloud:
+    openfeign:
+      client:
+        config:
+          notification-service:
+            connectTimeout: 2000
+            readTimeout: 5000
+
 eureka:
   instance:
     # 로컬 IDE 실행에서는 IP 등록이 편해서 기본값이 true 다.
@@ -125,6 +136,8 @@ rpgym:
   kafka:
     #  이벤트 계약 -- Health 3종을 한 토픽으로 통합했다
     health-events-topic: health.events
+    # 슬랙 버튼의 응답이 돌아오는 토픽. Notification 이 발행하고 game 이 구독한다 (잠정값)
+    notification-events-topic: notification.events
 
   outbox:
     # 발행 토픽. 소비 측(Notification)과 맞춰야 하는 값이라 팀 확인이 필요하다 (잠정값)
@@ -142,3 +155,27 @@ rpgym:
     # XP 원본 선택. mock = 해시 기반 가짜값, wallet = XpQueryService 경유 실제 wallets.
     # wallets 와 XpQueryService 가 develop 에 들어와서 wallet 으로 전환한다.
     source: wallet
+
+  party:
+    max-member: 4
+    # 모집 시간. SA 정리본 기준 24h. 자동 매칭을 바꾸려면 이 값만 바꾼다
+    recruit-duration: 24h
+    # 파티 수명. 퀘스트 담당이 파티 퀘스트 기한으로 읽는 ends_at 의 근거
+    lifetime: 7d
+    # 초대 만료. recruit-duration 이하
+    invitation-ttl: 24h
+    # 자동 매칭 후보 수. 경쟁에서 밀리면 재조회 없이 다음 후보로 넘어간다
+    matching-candidates: 10
+    batch:
+      # 모집 마감 전이 주기(ms). lazy 판정이 정확성을 보장하니 이건 정리용이다
+      close-interval: 10000
+      # 파티 종료 · 초대 만료 정리 주기(ms)
+      end-interval: 60000
+    outbox:
+      # 파티 전용 outbox(party_outbox_events) 릴레이. 알림용 5종은 HTTP 로 나가고, PARTY_MATCHED 만 이 토픽으로 나간다.
+      # 퀘스트는 이 토픽을 구독하지 않는다 (#122 확정: 파티 ↔ 퀘스트 는 Spring 이벤트만). 현재 PARTY_MATCHED 는 듣는 쪽이 없다
+      topic: game.events
+      poll-interval: 1000
+      poll-size: 100
+      send-timeout: 5s
+      escalate-after: 10
