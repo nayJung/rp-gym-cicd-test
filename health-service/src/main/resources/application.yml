@@ -61,6 +61,17 @@ spring:
       # 날짜/시각을 epoch 숫자가 아닌 ISO-8601 문자열로 직렬화
       write-dates-as-timestamps: false
 
+  task:
+    execution:
+      shutdown:
+        # 배포(blue/green 전환 등)로 인스턴스가 종료될 때,
+        # 진행 중인 @Async 작업(QuestSuggestionEventListener의 Gemini 호출 등)이
+        # 끝날 때까지 최대 15초 기다린 뒤 종료한다.
+        # 이 시간 안에 못 끝내면 어차피 강제 종료되며, 그 경우 발생하는
+        # 이벤트 유실은 #97의 30분 반복 제안 정책으로 자연 복구된다.
+        await-termination: true
+        await-termination-period: 15s
+
   cloud:
     openfeign:
       client:
@@ -150,3 +161,18 @@ management:
   zipkin:
     tracing:
       endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
+
+  metrics:
+    distribution:
+      # Timer의 분위수(p95/p99)를 Grafana에서 계산하려면 버킷 시계열이 필요하다.
+      # 켜지 않으면 sum/count/max만 노출되어 histogram_quantile을 쓸 수 없다.
+      percentiles-histogram:
+        rpgym.outbox.lag: true
+        rpgym.outbox.publish.duration: true
+      # 버킷 개수를 제한해 카디널리티 증가를 억제한다.
+      minimum-expected-value:
+        rpgym.outbox.lag: 10ms
+        rpgym.outbox.publish.duration: 1ms
+      maximum-expected-value:
+        rpgym.outbox.lag: 30s
+        rpgym.outbox.publish.duration: 10s
