@@ -10,6 +10,7 @@ import java.time.LocalDate;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * 하루치를 세는 규칙. 입력은 DAILY_GOAL_COMPLETED 하나뿐이라
@@ -115,5 +116,48 @@ class UserAchievementTest {
         assertThat(r).isEqualTo(CountResult.SKIPPED);
         assertThat(ua.getCurrentValue()).isEqualTo(1);
         assertThat(ua.getAchievedAt()).isEqualTo(AT);
+    }
+
+    // ── 원천 기반 (파티) ──────────────────────────────────────────────
+
+    @Test
+    @DisplayName("applyAbsolute — 원본에서 센 값을 그대로 덮어쓴다. 기준값 3에 3이 오면 ACHIEVED")
+    void applyAbsoluteOverwrites() {
+        UserAchievement ua = fresh();
+
+        assertThat(ua.applyAbsolute(1, 3, AT)).isEqualTo(CountResult.PROGRESSED);
+        assertThat(ua.applyAbsolute(3, 3, AT)).isEqualTo(CountResult.ACHIEVED);
+        assertThat(ua.getCurrentValue()).isEqualTo(3);
+        assertThat(ua.getAchievedAt()).isEqualTo(AT);
+    }
+
+    @Test
+    @DisplayName("applyAbsolute — 같은 값이 다시 오면 SKIPPED (이벤트 재전송). 같은 날 두 번 와도 날짜로 막지 않는다")
+    void applyAbsoluteSameValueIsSkipped() {
+        UserAchievement ua = fresh();
+        ua.applyAbsolute(1, 3, AT);
+
+        assertThat(ua.applyAbsolute(1, 3, AT)).isEqualTo(CountResult.SKIPPED);
+        assertThat(ua.applyAbsolute(2, 3, AT)).isEqualTo(CountResult.PROGRESSED);   // 같은 날짜, 다른 값 → 센다
+        assertThat(ua.getCurrentValue()).isEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("applyAbsolute — 이미 ACHIEVED 면 SKIPPED")
+    void applyAbsoluteAfterAchievedIsSkipped() {
+        UserAchievement ua = fresh();
+        ua.applyAbsolute(1, 1, AT);
+
+        assertThat(ua.applyAbsolute(5, 1, AT)).isEqualTo(CountResult.SKIPPED);
+        assertThat(ua.getCurrentValue()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("count() 에 원천 기반 조건을 넘기면 예외 — 서비스가 조건을 잘못 고른 것")
+    void countRejectsNonDailyCondition() {
+        UserAchievement ua = fresh();
+
+        assertThatThrownBy(() -> ua.count(D1, ConditionType.PARTY_COMPLETED_COUNT, 1, AT))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 }

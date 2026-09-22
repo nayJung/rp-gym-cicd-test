@@ -56,7 +56,7 @@ class AchievementProgressServiceTest {
         streak3 = Achievement.create(UUID.randomUUID(), "DAILY_GOAL_STREAK_3", "3일 연속", "일일 목표를 3일 연속 달성",
                 AchievementScope.PERSONAL, ConditionType.DAILY_GOAL_STREAK, 3, 0);
 
-        given(achievementRepository.findActiveByScope(AchievementScope.PERSONAL)).willReturn(List.of(first, streak3));
+        given(achievementRepository.findActiveByConditionTypes(ConditionType.DAILY_GOAL)).willReturn(List.of(first, streak3));
         given(userAchievementRepository.save(any())).willAnswer(inv -> inv.getArgument(0));
     }
 
@@ -123,7 +123,7 @@ class AchievementProgressServiceTest {
     @Test
     @DisplayName("ACTIVE 업적이 하나도 없으면 아무것도 하지 않는다")
     void noActiveAchievements() {
-        given(achievementRepository.findActiveByScope(AchievementScope.PERSONAL)).willReturn(List.of());
+        given(achievementRepository.findActiveByConditionTypes(ConditionType.DAILY_GOAL)).willReturn(List.of());
 
         List<Achievement> unlocked = sut.recordDailyGoal(USER, D1, AT);
 

@@ -1,6 +1,6 @@
 package com.workoutdone.rpgym.game.achievement.application;
 
-import com.workoutdone.rpgym.game.achievement.domain.AchievementScope;
+import com.workoutdone.rpgym.game.achievement.domain.ConditionType;
 import com.workoutdone.rpgym.game.achievement.domain.CountResult;
 import com.workoutdone.rpgym.game.achievement.domain.OwnerType;
 import com.workoutdone.rpgym.game.achievement.domain.aggregate.Achievement;
@@ -47,7 +47,7 @@ public class AchievementProgressService {
      */
     @Transactional
     public List<Achievement> recordDailyGoal(UUID userId, LocalDate activityDate, Instant achievedAt) {
-        List<Achievement> targets = achievementRepository.findActiveByScope(AchievementScope.PERSONAL);
+        List<Achievement> targets = achievementRepository.findActiveByConditionTypes(ConditionType.DAILY_GOAL);
         if (targets.isEmpty()) {
             log.warn("ACTIVE 개인 업적이 없다. V6 시드가 안 들어갔을 수 있다. userId={}", userId);
             return List.of();
