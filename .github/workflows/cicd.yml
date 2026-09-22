@@ -15,12 +15,6 @@ on:
       - "docs/**"
       - ".github/ISSUE_TEMPLATE/**"
 
-# 같은 브랜치에서 새로운 커밋이 올라오면
-# 이전 CI/CD를 취소하여 불필요한 리소스 사용을 방지
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 # GitHub Repository 내용을 읽기만 할 수 있도록 권한 제한
 permissions:
   contents: read
@@ -32,6 +26,12 @@ jobs:
 
     # GitHub Actions에서 제공하는 Ubuntu 환경에서 실행
     runs-on: ubuntu-latest
+
+    # 같은 브랜치에 새로운 커밋이 올라오면
+    # 이전 CI를 취소하고 최신 커밋 기준으로 다시 검증
+    concurrency:
+      group: ci-${{ github.workflow }}-${{ github.ref }}
+      cancel-in-progress: true
 
     # CI가 15분 이상 실행되면 강제 종료
     timeout-minutes: 15
