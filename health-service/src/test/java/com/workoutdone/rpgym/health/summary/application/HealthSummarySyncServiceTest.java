@@ -28,6 +28,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.assertj.core.api.Assertions.assertThat;
 
 @ExtendWith(MockitoExtension.class)
 class HealthSummarySyncServiceTest {
@@ -89,8 +90,11 @@ class HealthSummarySyncServiceTest {
 
         service.sync(syncedActivity);
 
+        String expectedDedupKey = "DAILY_GOAL_COMPLETED:%s:%s".formatted(userId, activityDate);
+
         verify(eventOutboxPort).append(
-                any(), eq(HealthEventType.DAILY_GOAL_COMPLETED), eq(userId), eq(activityId), any(), any()
+                any(), eq(HealthEventType.DAILY_GOAL_COMPLETED), eq(userId), eq(activityId),
+                eq(expectedDedupKey), any()
         );
     }
 
@@ -119,6 +123,38 @@ class HealthSummarySyncServiceTest {
 
         service.sync(syncedActivity);
 
+        verify(eventOutboxPort, never()).append(
+                any(), eq(HealthEventType.DAILY_GOAL_COMPLETED), any(), any(), any(), any()
+        );
+    }
+
+    @Test
+    void 이미_실패처리된_날짜는_뒤늦게_달성해도_완료처리되지_않는다() {
+        Instant earlier = Instant.parse("2026-08-30T01:00:00Z");
+        DailyHealthSummary summary = DailyHealthSummary.createFor(userId, activityDate, earlier);
+        summary.applySync(3000, 40, 200, earlier, earlier);
+        summary.markAsFailed(earlier.plusSeconds(300));
+
+        UUID summaryId = summary.getSummaryId();
+        List<DailyGoalProgress> progresses = List.of(
+                achievedProgress(summaryId, MetricType.STEPS, BigDecimal.valueOf(5000)),
+                achievedProgress(summaryId, MetricType.ACTIVE_MINUTES, BigDecimal.valueOf(60)),
+                achievedProgress(summaryId, MetricType.ACTIVE_CALORIES, BigDecimal.valueOf(300))
+        );
+
+        given(summaryRepository.findByUserIdAndActivityDate(userId, activityDate))
+                .willReturn(Optional.of(summary));
+        given(progressRepository.findBySummaryId(summaryId)).willReturn(progresses);
+
+        Instant lateMeasuredAt = earlier.plusSeconds(600);
+        SyncedActivity syncedActivity = new SyncedActivity(
+                activityId, userId, activityDate, lateMeasuredAt, 5000, 60, 300
+        );
+
+        service.sync(syncedActivity);
+
+        assertThat(summary.getFailedAt()).isNotNull();
+        assertThat(summary.getAchievedAt()).isNull();
         verify(eventOutboxPort, never()).append(
                 any(), eq(HealthEventType.DAILY_GOAL_COMPLETED), any(), any(), any(), any()
         );
