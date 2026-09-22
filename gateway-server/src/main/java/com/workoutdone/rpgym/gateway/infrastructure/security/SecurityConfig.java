@@ -47,8 +47,6 @@ public class SecurityConfig {
                                 "/api/v1/users/login",
                                 "/api/v1/users/signup",
                                 "/api/v1/users/refresh",
-                                // Slack Interactivity 콜백 -- Slack은 우리 JWT가 없고 자체 서명으로 스스로를 증명한다.
-                                "/api/v1/notifications/slack/interactions",
                                 "/actuator/health",
                                 "/actuator/prometheus"
                         ).permitAll()
