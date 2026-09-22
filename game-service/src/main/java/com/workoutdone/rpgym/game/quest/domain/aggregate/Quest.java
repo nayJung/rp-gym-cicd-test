@@ -33,6 +33,7 @@ public class Quest extends BaseCreatedUpdatedEntity {
     @Column(name = "user_id", nullable = false, updatable = false)
     private UUID userId;
 
+    // uk_quests_suggestion UNIQUE
     @Column(name = "suggestion_id", nullable = false, updatable = false, unique = true)
     private UUID suggestionId;
 
@@ -101,7 +102,8 @@ public class Quest extends BaseCreatedUpdatedEntity {
             Instant expiredAt
     ) {
         // targetVal / baselineVal의 출처는 Health의 AI다.
-        // 셋 다 "값이 이상하다"가 아니라 "그대로 두면 돈이 나가거나 기능이 멈춘다"인 것만 골랐다.
+        // 셋 다 "값이 이상하다"가 아니라 "그대로 두면 xp가 나가거나 전체 기능이 멈추는것과 같다"
+        // 인 것만 골랐다.
 
         // targetVal <= 0 이면 첫 스냅샷에서 달성분 0 >= 0 이 성립해 즉시 완료 → 공짜 XP 지급.
         if (targetVal <= 0) {
@@ -136,9 +138,7 @@ public class Quest extends BaseCreatedUpdatedEntity {
 
     /**
      * 건강 데이터 스냅샷 하나를 이 Quest에 반영하고 판정한다. 가장 중요한 부분
-     *
      * 순서가 곧 우선순위다
-     *
      * snapshot 이 Quest의 유저·날짜에 해당하는 누적 스냅샷 (검증은 호출부 책임)
      * return 반영 결과. {Completed}일 때만 XP 지급과 QuestCompleted 발행이 일어난다
      */
@@ -149,9 +149,11 @@ public class Quest extends BaseCreatedUpdatedEntity {
             return new ApplyResult.Ignored(ApplyResult.Reason.NOT_ACTIVE);
         }
 
+        // Instant.now()가 아니라 snapshot.measuredAt()인 이유
+        // 도메인 영역은 시계(외부어댑터)에도 의존성을 가지면 안되기 때문
         Instant measuredAt = snapshot.measuredAt();
 
-        // 2. 중복 도착과 순서 역전을 한 조건으로 막는다
+        // 2. 중복 도착과 순서 역전을 한 조건으로 막는다(이미 본 시각 이하의 스냅샷)
         // !isAfter(x) 는 "x 이하"다. '미만'으로 쓰면 같은 measuredAt 재수신이 통과하는데,
         // 중복이란 정확히 그 경우다. 여기가 뚫리면 XP가 두 번 지급된다.
         // lastAppliedMeasuredAt이 null이면 첫 이벤트이므로 비교 없이 통과시킨다.
