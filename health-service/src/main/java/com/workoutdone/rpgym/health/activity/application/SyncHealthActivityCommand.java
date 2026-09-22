@@ -21,9 +21,10 @@ public record SyncHealthActivityCommand(
     /**
      * measuredAt을 초 단위로 절삭한다.
      *
-     * measuredAt은 (user_id, measured_at) 유니크 키의 일부라, 기기가 밀리초까지 보내면
-     * 같은 시점의 재전송도 매번 다른 행이 되어 멱등 처리와 재동기화 경로가 동작하지 않는다.
+     * measuredAt은 (user_id, measured_at) 유니크 키의 일부라, 같은 측정이 다른 정밀도
+     * (예: 01:30:00.789Z / 01:30:00Z)로 들어오면 서로 다른 행이 된다.
      * 어댑터마다 절삭하지 않고 여기서 한 번에 맞춰, 수집 채널과 관계없이 같은 기준을 갖게 한다.
+     * 재전송 멱등성 자체는 클라이언트가 재시도 시 같은 measuredAt을 보내는 것을 전제로 한다.
      */
     public SyncHealthActivityCommand {
         if (measuredAt != null) {
