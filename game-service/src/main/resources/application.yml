@@ -149,7 +149,7 @@ rpgym:
     # 발행 토픽. 소비 측(Notification)과 맞춰야 하는 값이라 팀 확인이 필요하다 (잠정값)
     topic: game.events
     # 폴링 주기(ms). fixedDelay 이므로 이전 라운드가 끝난 뒤부터 센다
-    poll-interval: 1000
+    poll-interval: 200
     # 한 라운드에 집을 PENDING 최대 건수
     poll-size: 100
     # Kafka 발행 응답 대기 시간
