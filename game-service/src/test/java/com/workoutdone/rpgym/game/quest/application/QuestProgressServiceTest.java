@@ -3,6 +3,7 @@ package com.workoutdone.rpgym.game.quest.application;
 import com.workoutdone.rpgym.game.outbox.application.OutboxRecorder;
 import com.workoutdone.rpgym.game.outbox.domain.AggregateType;
 import com.workoutdone.rpgym.game.outbox.domain.OutboxEventType;
+import com.workoutdone.rpgym.game.quest.application.payload.QuestCompletedData;
 import com.workoutdone.rpgym.game.quest.domain.Metric;
 import com.workoutdone.rpgym.game.quest.domain.aggregate.Quest;
 import com.workoutdone.rpgym.game.quest.domain.aggregate.UserLatestSnapshot;
@@ -16,6 +17,7 @@ import com.workoutdone.rpgym.game.xp.domain.SourceType;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 import java.time.Instant;
 import java.time.LocalDate;
@@ -85,6 +87,26 @@ class QuestProgressServiceTest {
         verify(outboxRecorder, times(1)).append(
                 eq(AggregateType.QUEST), eq(quest.getQuestId()), eq(OutboxEventType.QUEST_COMPLETED),
                 eq(USER_ID), eq(COMPLETED_AT), any());
+    }
+
+    @Test
+    @DisplayName("완료 이벤트에 퀘스트 제목이 실린다 — 알림 쪽이 이것만으로 카드를 그릴 수 있어야 한다")
+    void 완료_이벤트에_제목이_실린다() {
+        ArgumentCaptor<QuestCompletedData> payload = ArgumentCaptor.forClass(QuestCompletedData.class);
+
+        service.apply(USER_ID, snapshot("2026-08-28T09:30:00Z", 53));
+
+        verify(outboxRecorder).append(any(), any(), any(), any(), any(), payload.capture());
+        QuestCompletedData data = payload.getValue();
+        // 제목이 없으면 카드에 클라이언트가 읽을 내용이 하나도 남지 않는다. 퀘스트 식별자는 UUID다.
+        assertEquals("20분 산책하기", data.title());
+        assertEquals(quest.getQuestId(), data.questId());
+        assertEquals("ACTIVE_MINUTES", data.metric());
+        assertEquals(TARGET, data.targetValue());
+        assertEquals(BASELINE, data.baselineValue());
+        assertEquals(53 - BASELINE, data.achievedDelta());
+        assertEquals(REWARD_XP, data.rewardXp());
+        assertEquals(COMPLETED_AT, data.completedByMeasuredAt());
     }
 
     @Test

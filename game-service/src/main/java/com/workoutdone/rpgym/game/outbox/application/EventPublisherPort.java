@@ -5,7 +5,7 @@ import com.workoutdone.rpgym.game.outbox.domain.OutboxEventType;
 /**
  * 아웃바운드 포트. 구현은 Kafka.
  *
- * 인바운드 포트는 만들지 않지만(D-1) 이건 만든다. Kafka는 라이브러리가 아니라 외부 시스템이고,
+ * 인바운드 포트는 만들지 않지만 이건 만든다. Kafka는 라이브러리가 아니라 외부 시스템이고,
  * 구현이 어댑터에 있으며 테스트에서 갈아끼워야 한다. ObjectMapper에 포트를 두지 않은 것과 같은 잣대다.
  */
 public interface EventPublisherPort {
