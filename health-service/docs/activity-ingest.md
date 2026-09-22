@@ -53,6 +53,7 @@ health-service에 앱 전용 인증 코드를 추가할 필요가 없다.
 | 재전송 | 같은 `(userId, measuredAt)`이면 값이 같으면 무시, 다르면 갱신 (200) |
 | 재시도 | 실패한 요청을 **본문 그대로**(`measuredAt`과 값 모두) 다시 보낸다. 현재 시각으로 `measuredAt`을 새로 만들지 않는다 |
 | 재집계 | 값을 다시 집계했다면 **새 `measuredAt`**으로 보낸다. 같은 `measuredAt`에 값만 바꿔 보내지 않는다 |
+| 자정 이후 어제 데이터 재집계 | 어제 날짜의 새 `measuredAt`으로 보낸다. 조건은 아래 "자정 이후 어제 데이터 재집계" 참고 |
 | 신규 | 201 |
 
 ### 재시도와 재집계를 구분하는 이유
@@ -69,6 +70,38 @@ Outbox `dedup_key`가 `(userId, measuredAt)` 단위이고, Game Service도 `meas
 - 현재는 이 규약을 클라이언트 계약으로만 두고 서버에서 강제하지 않는다. 데이터 출처가 Synthetic뿐이라 규약 위반이 일어나지 않는다.
 - 앱을 구현할 때 "같은 `measuredAt`에 다른 값이면 409"로 서버에서 강제하는 방안을 함께 검토한다. 테이블 명세의 "존재하면 UPDATE" 규칙과 클라이언트 재전송 처리가 같이 바뀌어야 한다.
 - 값이 줄어드는 정정은 이 규약으로도 이미 완료된 퀘스트와 지급된 XP를 되돌리지 못하므로 별도 논의가 필요하다.
+
+### 자정 이후 어제 데이터 재집계
+자정 직전의 정정이 다음 동기화로 흡수되지 않고 어제 값으로 남는 문제는, 앱이 자정 이후 어제 범위를 다시 집계해
+**어제 날짜의 새 `measuredAt`**으로 보내면 서버 수정 없이 해소된다.
+
+```
+23:50  measuredAt=어제 23:50     9,800  → 이벤트 → 어제 퀘스트 9,800 (미달)
+00:10  어제 범위 재집계         10,500
+       measuredAt=어제 23:59:00 로 전송
+       → Health: activityDate=어제 새 행 저장, 이벤트 발행 (dedup_key가 다름)
+       → Game: 어제 퀘스트 조회 → 23:59:00 > 마지막 반영 23:50 → COMPLETED, XP 지급
+```
+
+**지켜야 할 조건**
+1. `measuredAt`은 어제 `23:59:59 KST`보다 **이른** 시각이어야 한다 (예: `23:59:00`).
+   Game의 활성 퀘스트 조회 조건이 `expiredAt > measuredAt`(초과)이고 퀘스트 만료 시각이 `23:59:59`라, 정확히 `23:59:59`면 어제 퀘스트를 찾지 못한다.
+2. 어제 마지막으로 보낸 `measuredAt`보다 **늦어야** 한다. 같거나 이르면 `STALE_SNAPSHOT`으로 무시된다.
+3. 값이 바뀌었으므로 재집계 규약대로 **새 `measuredAt`**이어야 한다.
+
+**이 동작이 성립하는 이유 (game-service 기준)**
+- `lastAppliedMeasuredAt`은 사용자 단위가 아니라 **퀘스트 단위**다. 오늘 이벤트가 먼저 처리돼도 어제 퀘스트의 기준 시각은 바뀌지 않는다.
+- 대상 퀘스트를 현재 시각이 아니라 **`measuredAt`으로** 찾는다 (`findActiveByUserId(userId, measuredAt)`). 어제 날짜 이벤트는 자정 이후 도착해도 어제 퀘스트로 간다.
+- 만료된 퀘스트의 `status`를 `EXPIRED`로 바꾸는 배치가 없다. `EXPIRED`는 조회 시 계산값(`displayStatus`)이라 어제 퀘스트가 조회 대상에 남는다.
+- Health는 과거 `measuredAt`을 막지 않고(`@NotFutureMeasuredAt`은 미래만 거부) `activityDate`를 `measuredAt`에서 파생하므로 어제 날짜로 저장한다.
+
+**주의**
+- 이 동작은 "퀘스트 만료 배치가 없다"는 사실에 기댄다. 자정에 퀘스트를 `EXPIRED`로 바꾸는 배치가 추가되면 늦게 도착한 어제 데이터가 조용히 버려지므로 game-service와 함께 검토해야 한다.
+- 늦은 데이터를 받는 기한이 양쪽 서비스 모두 없다. 앱 구현 시 "어제까지만 허용" 같은 과거 쪽 경계를 입력 검증에 두는 것을 검토한다 (`@NotFutureMeasuredAt`과 짝).
+- Health의 `DailyGoalFailureScheduler`는 매일 00:05에 어제 일일 목표를 실패로 확정한다(`failedAt`). 이후 도착한 어제 데이터도 `applySync`로 합계·진행도는 갱신된다.
+  - `markAllGoalsAchieved`가 `failedAt`도 확인하므로, 00:05 이후에 어제 목표를 채워도 달성 처리와 `DAILY_GOAL_COMPLETED` 발행은 일어나지 않는다. `achievedAt`과 `failedAt`이 동시에 채워지는 모순 상태를 막기 위한 결정이다.
+  - 그 결과 00:05 이후 도착한 어제 데이터는 **Game에서는 퀘스트 완료, Health에서는 일일 목표 실패**로 판정이 갈릴 수 있다. 현재 `DAILY_GOAL_COMPLETED`를 처리하는 소비자가 없어 보상 영향은 없으며, 소비자를 추가할 때 이 차이를 고려한다.
+  - ** `publishDeficientGoalEventIfNeeded`가 날짜를 확인하지 않아, 미달인 어제 데이터가 오면 어제 날짜로 퀘스트 제안(Gemini 호출)이 나가고 Game에서 `SNAPSHOT_MISMATCH`로 거부되거나 이미 만료된 퀘스트가 생성된다. `activityDate`가 오늘(KST)이 아니면 제안을 건너뛰도록 했다.
 
 ## 범위 밖 (의도적으로 제외)
 | 항목 | 제외 이유 |
