@@ -2,8 +2,8 @@ package com.workoutdone.rpgym.game.quest.application;
 
 // 파티 퀘스트 생성 결과다.
 // 생성은 수락과 달리 실패해도 남겨야 할 상태 변경이 없다. 그래서 예외로 처리해도 틀리지 않는다.
-// 그래도 결과 타입으로 돌려주는 쪽을 택한 이유는 두 가지다.
-// 실패 사유가 일곱 가지라 예외를 그만큼 만들거나 하나에 사유를 담아야 한다
+// 그래도 결과 타입으로 돌려주는 쪽을 택한 이유는 실패 사유가 여덟 가지라
+// 예외를 그만큼 만들거나 하나에 사유를 담아야 하기 때문이다.
 public sealed interface PartyQuestCreation {
 
     record Created(PartyQuestView view) implements PartyQuestCreation {}
@@ -11,14 +11,20 @@ public sealed interface PartyQuestCreation {
     record Failed(Reason reason) implements PartyQuestCreation {}
 
     enum Reason {
-        // 인원이 없거나 정원을 넘거나 같은 사람이 두 번 들어 있다.
-        INVALID_MEMBERS,
-
-        // 요청한 사람이 명단에 없다. 자기가 속하지 않은 파티의 퀘스트를 만들 수 없다.
+        // 요청자가 그 파티의 활성 멤버가 아니다. 소속된 파티가 아예 없는 경우도 여기로 온다.
         NOT_A_MEMBER,
 
-        // 지표가 세 종류 밖이다.
-        UNKNOWN_METRIC,
+        // 파티 멤버이긴 하지만 파티장이 아니다.
+        // 무엇을 얼마나 할지는 파티장이 정한다고 파티 담당자와 합의했다.
+        NOT_OWNER,
+
+        // 파티가 모집 중이거나 이미 끝났다.
+        // 모집 중에 만들면 나중에 들어온 멤버가 명단에 없는 채로 남는다.
+        // 파티 퀘스트는 시작 후 중도 합류가 안 되기 때문에 그 멤버는 끝까지 기여할 수 없다.
+        PARTY_NOT_ACTIVE,
+
+        // 파티에 활성 멤버가 없거나 정원을 넘는다. 파티 쪽 불변식이 깨진 경우다.
+        INVALID_MEMBERS,
 
         // 목표가 0 이하다. 첫 스냅샷에서 바로 완료되어 XP 가 공짜로 나간다.
         INVALID_TARGET,

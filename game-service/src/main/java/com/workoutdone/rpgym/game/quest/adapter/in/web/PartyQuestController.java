@@ -39,9 +39,7 @@ public class PartyQuestController {
                 request.partyId(),
                 userId,
                 request.title(),
-                request.metric(),
-                request.targetValue(),
-                request.memberUserIds()
+                request.targetValue()
         ));
 
         if (creation instanceof PartyQuestCreation.Created created) {

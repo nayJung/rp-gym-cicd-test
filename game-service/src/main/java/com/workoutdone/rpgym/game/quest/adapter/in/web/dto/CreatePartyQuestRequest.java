@@ -1,17 +1,14 @@
 package com.workoutdone.rpgym.game.quest.adapter.in.web.dto;
 
-import java.util.List;
 import java.util.UUID;
 
 // 파티 퀘스트 생성 요청이다.
-// memberUserIds 와 metric 은 지금만 요청으로 받는다.
-// 파티 담당자의 테이블을 읽게 되면 partyId 하나로 명단과 지표를 모두 가져오고 두 필드는 사라진다.
-// 그 전에도 판정과 동시성 실험을 돌릴 수 있어야 해서 이렇게 열어뒀다.
+// 명단과 지표를 받지 않는다. 둘 다 파티가 이미 확정해서 들고 있는 값이라 partyId 하나로 읽는다.
+// 요청자가 보낸 명단으로 "요청자가 그 명단에 있는가" 를 검사하는 것은
+// 요청자가 준 데이터를 요청자가 준 데이터로 검사하는 것이라 인가가 성립하지 않는다.
 public record CreatePartyQuestRequest(
         UUID partyId,
         String title,
-        String metric,
-        int targetValue,
-        List<UUID> memberUserIds
+        int targetValue
 ) {
 }

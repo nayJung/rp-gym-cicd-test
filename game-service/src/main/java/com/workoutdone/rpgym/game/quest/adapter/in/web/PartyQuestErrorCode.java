@@ -13,22 +13,30 @@ import org.springframework.http.HttpStatus;
 @RequiredArgsConstructor
 public enum PartyQuestErrorCode implements ErrorCode {
 
-    INVALID_PARTY_MEMBERS(
-            "INVALID_PARTY_MEMBERS",
-            HttpStatus.BAD_REQUEST,
-            "참여 인원이 올바르지 않습니다. 1명 이상 4명 이하로, 중복 없이 보내주세요."
-    ),
-
     NOT_A_PARTY_MEMBER(
             "NOT_A_PARTY_MEMBER",
             HttpStatus.FORBIDDEN,
             "본인이 참여하지 않는 파티의 퀘스트는 만들 수 없습니다."
     ),
 
-    INVALID_METRIC(
-            "INVALID_METRIC",
-            HttpStatus.BAD_REQUEST,
-            "지표가 올바르지 않습니다. STEPS, ACTIVE_MINUTES, ACTIVE_CALORIES 중 하나여야 합니다."
+    NOT_PARTY_OWNER(
+            "NOT_PARTY_OWNER",
+            HttpStatus.FORBIDDEN,
+            "파티 퀘스트는 파티장만 만들 수 있습니다."
+    ),
+
+    // 400 이 아니라 409 인 이유는 요청 자체는 올바르기 때문이다.
+    // 모집이 끝나 파티가 시작되면 같은 요청이 그대로 성공한다.
+    PARTY_NOT_ACTIVE(
+            "PARTY_NOT_ACTIVE",
+            HttpStatus.CONFLICT,
+            "파티가 진행 중이 아닙니다. 모집이 끝난 뒤에 만들 수 있습니다."
+    ),
+
+    INVALID_PARTY_MEMBERS(
+            "INVALID_PARTY_MEMBERS",
+            HttpStatus.CONFLICT,
+            "파티 인원이 올바르지 않습니다. 잠시 후 다시 시도해 주세요."
     ),
 
     INVALID_TARGET_VALUE(
@@ -63,9 +71,10 @@ public enum PartyQuestErrorCode implements ErrorCode {
 
     public static PartyQuestErrorCode of(PartyQuestCreation.Reason reason) {
         return switch (reason) {
-            case INVALID_MEMBERS -> INVALID_PARTY_MEMBERS;
             case NOT_A_MEMBER -> NOT_A_PARTY_MEMBER;
-            case UNKNOWN_METRIC -> INVALID_METRIC;
+            case NOT_OWNER -> NOT_PARTY_OWNER;
+            case PARTY_NOT_ACTIVE -> PartyQuestErrorCode.PARTY_NOT_ACTIVE;
+            case INVALID_MEMBERS -> INVALID_PARTY_MEMBERS;
             case INVALID_TARGET -> INVALID_TARGET_VALUE;
             case INVALID_TITLE -> PartyQuestErrorCode.INVALID_TITLE;
             case PARTY_QUEST_ALREADY_ACTIVE -> PartyQuestErrorCode.PARTY_QUEST_ALREADY_ACTIVE;

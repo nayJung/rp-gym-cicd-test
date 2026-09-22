@@ -144,8 +144,6 @@ rpgym:
   kafka:
     #  이벤트 계약 -- Health 3종을 한 토픽으로 통합했다
     health-events-topic: health.events
-    # 슬랙 버튼의 응답이 돌아오는 토픽. Notification 이 발행하고 game 이 구독한다 (잠정값)
-    notification-events-topic: notification.events
 
   outbox:
     # 발행 토픽. 소비 측(Notification)과 맞춰야 하는 값이라 팀 확인이 필요하다 (잠정값)
