@@ -6,11 +6,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.workoutdone.rpgym.game.quest.adapter.in.kafka.dto.HealthActivitySyncedData;
 import com.workoutdone.rpgym.game.quest.adapter.in.kafka.dto.HealthEventEnvelope;
 import com.workoutdone.rpgym.game.quest.adapter.in.kafka.dto.QuestSuggestedData;
+import com.workoutdone.rpgym.game.quest.application.PartyQuestProgressService;
 import com.workoutdone.rpgym.game.quest.application.QuestProgressService;
 import com.workoutdone.rpgym.game.quest.application.QuestSuggestionCommand;
 import com.workoutdone.rpgym.game.quest.application.QuestSuggestionService;
 import com.workoutdone.rpgym.game.quest.application.SuggestionOutcome;
 import com.workoutdone.rpgym.game.quest.domain.vo.ApplyResult;
+import com.workoutdone.rpgym.game.quest.domain.vo.ContributionResult;
 import com.workoutdone.rpgym.game.quest.domain.vo.Snapshot;
 
 import lombok.RequiredArgsConstructor;
@@ -47,6 +49,7 @@ public class HealthEventConsumer {
 
     private final ObjectMapper objectMapper;
     private final QuestProgressService questProgressService;
+    private final PartyQuestProgressService partyQuestProgressService;
     private final QuestSuggestionService questSuggestionService;
 
     // inbound(Driving) HEALTH_ACTIVITY_SYNCED, QUEST_SUGGESTED 트랜잭션을 시작하기 위한 어댑터
@@ -115,8 +118,18 @@ public class HealthEventConsumer {
         );
 
         Optional<ApplyResult> result = questProgressService.apply(envelope.userId(), snapshot);
-        log.debug("HEALTH_ACTIVITY_SYNCED 처리 완료. measuredAt={} result={}",
+        log.debug("HEALTH_ACTIVITY_SYNCED 개인 퀘스트 처리 완료. measuredAt={} result={}",
                 snapshot.measuredAt(), result.map(Object::toString).orElse("NO_ACTIVE_QUEST"));
+
+        // 같은 스냅샷을 파티 퀘스트에도 반영한다.
+        // 두 서비스가 각자 트랜잭션을 연다. 하나로 묶지 않는 이유는 둘이 독립이기 때문이다.
+        // 파티 쪽에서 문제가 생겼다고 개인 퀘스트 판정과 XP 지급을 되돌릴 이유가 없다.
+        // 파티 쪽이 예외를 던지면 컨슈머가 이 이벤트를 다시 처리하는데,
+        // 개인 퀘스트는 이미 반영한 시각 이하의 스냅샷을 무시하므로 두 번 반영되지 않는다.
+        Optional<ContributionResult> partyResult =
+                partyQuestProgressService.apply(envelope.userId(), snapshot);
+        log.debug("HEALTH_ACTIVITY_SYNCED 파티 퀘스트 처리 완료. measuredAt={} result={}",
+                snapshot.measuredAt(), partyResult.map(Object::toString).orElse("NO_ACTIVE_PARTY_QUEST"));
     }
 
     // T2 입구
