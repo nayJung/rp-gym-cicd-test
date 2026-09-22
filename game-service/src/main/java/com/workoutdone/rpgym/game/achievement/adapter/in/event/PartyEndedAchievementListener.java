@@ -6,8 +6,6 @@ import com.workoutdone.rpgym.game.party.application.PartyEnded;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
@@ -28,11 +26,11 @@ public class PartyEndedAchievementListener {
      * AFTER_COMMIT: endParty 트랜잭션(멤버 LEFT · 파티 ENDED)이 커밋된 뒤에만 돈다.
      * 그 전에 돌면 party_members 의 left_at 이 아직 안 보여 완주자가 0명이다.
      *
-     * REQUIRES_NEW: 이 시점엔 바깥 트랜잭션 리소스가 아직 바인딩돼 있어서, 기본 전파로 두면
-     * 이미 커밋된 트랜잭션에 합류해 save 가 조용히 유실된다.
+     * 여기에 @Transactional 을 걸지 않는다. 경계는 PartyAchievementService 의 REQUIRES_NEW 다.
+     * 걸면 서비스의 예외가 물리 트랜잭션을 rollback-only 로 만들고, 아래 catch 가 삼켜도
+     * 프록시 커밋에서 UnexpectedRollbackException 이 터진다 (랭킹에서 실제로 겪은 문제).
      */
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void on(PartyEnded event) {
         try {
             partyAchievementService.recordPartyCompleted(event.partyId(), event.endedAt());

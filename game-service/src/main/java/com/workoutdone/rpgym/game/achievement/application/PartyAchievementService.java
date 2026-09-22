@@ -12,6 +12,7 @@ import com.workoutdone.rpgym.game.party.domain.repo.PartyMemberRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
@@ -47,7 +48,10 @@ public class PartyAchievementService {
      * @param endedAt 파티의 ends_at. 완주자 판정 키(left_at = ends_at)이자 achieved_at 의 재료
      * @return 유저별 새로 딴 업적. 비어 있으면 진행만 됐거나 전부 SKIPPED
      */
-    @Transactional
+    // REQUIRES_NEW 다. AFTER_COMMIT 리스너가 부르는데 그 시점엔 이미 커밋된 바깥 트랜잭션 리소스가
+    // 아직 바인딩돼 있어, 기본 전파면 거기 합류해 save 가 조용히 유실된다.
+    // 경계가 리스너가 아니라 여기인 이유는 리스너 주석 참고 (UnexpectedRollbackException).
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public Map<UUID, List<Achievement>> recordPartyCompleted(UUID partyId, Instant endedAt) {
         List<Achievement> targets = achievementRepository.findActiveByConditionTypes(ConditionType.PARTY);
         if (targets.isEmpty()) {

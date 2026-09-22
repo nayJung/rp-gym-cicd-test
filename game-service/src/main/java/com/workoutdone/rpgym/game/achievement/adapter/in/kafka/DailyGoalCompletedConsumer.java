@@ -16,17 +16,20 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 
 /**
- * health.events 에서 DAILY_GOAL_COMPLETED 만 골라 업적에 넘긴다.
+ * health.daily-goal.events 에서 DAILY_GOAL_COMPLETED 를 받아 업적에 넘긴다.
  *
- * quest 의 HealthEventConsumer 와 같은 토픽을 읽지만 **컨슈머 그룹이 다르다** (game-service-achievement).
- * Kafka 는 그룹마다 전체 메시지를 독립적으로 전달하므로, 이 리스너와 quest 리스너는 서로의 offset 도
- * 코드도 모른다. quest 쪽은 DAILY_GOAL_COMPLETED 를 계속 무시하면 되고, 이쪽은 나머지 2종을 무시한다.
- * 이렇게 두는 이유는 하나다 -- quest 파일을 건드리지 않기 위해서. 파일이 다르니 PR 충돌이 없다.
+ * 토픽이 quest 의 HealthEventConsumer(health.events) 와 다르다 -- Health 가 #135 에서 이 이벤트만
+ * 전용 토픽으로 분리했다. 발행 주기가 달라서다. Synced · QuestSuggested 는 30분마다, 이건 하루 1번이다.
+ * 섞어 두면 하루 1건을 받자고 30분 주기 이벤트를 전부 읽어 걸러야 하고, 적체 · 유실이 눈에 띄지 않는다.
  *
- * 대가: 같은 토픽을 두 번 읽는다. Health 이벤트는 유저당 30분에 1건이라 무시해도 되는 양이다.
+ * 순서 제약은 없다. 단일 토픽을 쓰던 이유(Synced -> QuestSuggested 순서로 Quest baseline 을 잡는 것)는
+ * 저 둘 사이의 문제고, 이 이벤트는 거기 끼지 않는다. 업적은 activityDate 로 판정하므로 도착 순서와 무관하다.
  *
- * 그룹 ID 는 별도 프로퍼티(rpgym.kafka.achievement-consumer-group) 로 빼되 기본값을 여기 둔다.
- * application.yml 을 안 건드려도 동작하고, 필요하면 프로퍼티로 덮어쓴다.
+ * 토픽 · 그룹 ID 는 프로퍼티로 빼되 기본값을 여기 둔다. application.yml 을 안 건드려도 동작한다 --
+ * 그 파일은 quest 담당과 같이 쓰는 파일이라 건드릴수록 충돌이 난다.
+ *
+ * eventType 검사는 남겨 둔다. 전용 토픽이라 다른 타입이 올 일은 없지만, 한 토픽에 다른 이벤트가
+ * 추가되는 날 조용히 잘못 처리하는 것보다 걸러내는 편이 안전하다.
  *
  * 예외 정책은 quest 컨슈머와 같다. 계약 위반(필드 누락 · 깨진 JSON)은 로그만 남기고 ack --
  * 몇 번을 다시 해도 같은 결과라 재시도가 의미 없고, 던지면 그 파티션이 영원히 막힌다.
@@ -43,7 +46,7 @@ public class DailyGoalCompletedConsumer {
     private final AchievementProgressService achievementProgressService;
 
     @KafkaListener(
-            topics = "${rpgym.kafka.health-events-topic}",
+            topics = "${rpgym.kafka.daily-goal-events-topic:health.daily-goal.events}",
             groupId = "${rpgym.kafka.achievement-consumer-group:game-service-achievement}"
     )
     public void consume(String message) {
@@ -55,8 +58,9 @@ public class DailyGoalCompletedConsumer {
             return;
         }
 
-        // 이 리스너의 관심사는 하나뿐이다. 나머지는 quest 컨슈머 몫이라 debug 도 남기지 않는다.
+        // 전용 토픽이라 정상이면 항상 통과한다. 다른 타입이 섞여 오면 조용히 넘긴다.
         if (!DAILY_GOAL_COMPLETED.equals(envelope.eventType())) {
+            log.warn("전용 토픽에 다른 eventType 이 왔다. 건너뛴다. eventType={}", envelope.eventType());
             return;
         }
         if (envelope.userId() == null) {

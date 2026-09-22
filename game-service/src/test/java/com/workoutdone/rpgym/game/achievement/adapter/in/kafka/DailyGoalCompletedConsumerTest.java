@@ -21,8 +21,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 /**
- * 이 컨슈머는 quest 의 HealthEventConsumer 와 같은 토픽을 다른 그룹으로 읽는다.
- * 그래서 "내 것만 처리하고 나머지는 조용히 지나간다" 와 "어떤 입력에도 예외를 안 던진다" 가 핵심이다.
+ * 이 컨슈머는 전용 토픽(health.daily-goal.events, #135)을 읽는다.
+ * "정상 이벤트를 그대로 넘긴다" 와 "어떤 입력에도 예외를 안 던진다" 가 핵심이다 --
+ * 예외를 던지면 그 파티션이 막히고, 하루 1건짜리 이벤트가 통째로 밀린다.
  */
 @ExtendWith(MockitoExtension.class)
 class DailyGoalCompletedConsumerTest {
@@ -62,7 +63,7 @@ class DailyGoalCompletedConsumerTest {
     }
 
     @Test
-    @DisplayName("HEALTH_ACTIVITY_SYNCED · QUEST_SUGGESTED — quest 몫이라 아무것도 하지 않는다")
+    @DisplayName("전용 토픽에 다른 eventType 이 섞여 와도 처리하지 않는다 (health.events 의 2종은 quest 몫)")
     void otherHealthEventsAreIgnored() {
         consumer.consume("""
                 {
