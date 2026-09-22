@@ -101,7 +101,7 @@ services:
 
   # Redis
   redis:
-    image: redis:latest
+    image: redis:8.8.2
     container_name: rp-gym-redis
     restart: unless-stopped
 
@@ -118,13 +118,19 @@ services:
 
   # Prometheus
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.14.0
     container_name: rp-gym-prometheus
     restart: unless-stopped
 
     volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./monitoring/prometheus/prometheus-prod.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
+
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
     expose:
       - "9090"
@@ -136,22 +142,32 @@ services:
 
   # Grafana
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.2.2
     container_name: rp-gym-grafana
     restart: unless-stopped
 
+    environment:
+      # nginx /grafana/ 경로 뒤에서 서빙하기 위한 서브패스 설정
+      GF_SERVER_ROOT_URL: "${GRAFANA_ROOT_URL}"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+
     volumes:
       - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
 
     expose:
       - "3000"
 
     depends_on:
-      - prometheus
-      - loki
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
 
     networks:
       - shared-network
+      - blue-network
 
   # Loki
   loki:
@@ -166,12 +182,19 @@ services:
     expose:
       - "3100"
 
+    healthcheck:
+      test: ["CMD", "/usr/bin/loki", "-health"]
+      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
     networks:
       - shared-network
 
   # Grafana Alloy
   alloy:
-    image: grafana/alloy:latest
+    image: grafana/alloy:v1.19.2
     container_name: rp-gym-alloy
     restart: unless-stopped
 
@@ -181,10 +204,30 @@ services:
       - alloy-data:/var/lib/alloy/data
 
     depends_on:
-      - loki
+      loki:
+        condition: service_healthy
 
     networks:
       - shared-network
+
+  # Zipkin
+  zipkin:
+    image: openzipkin/zipkin:3.6.1
+    container_name: rp-gym-zipkin
+    restart: unless-stopped
+
+    environment:
+      HEALTHCHECK_IP: 127.0.0.1
+      # 인메모리 저장 상한 (기본값 유지) - 부하테스트 중 OOM/메모리 급증 방지
+      MEM_MAX_SPANS: ${ZIPKIN_MEM_MAX_SPANS:-500000}
+
+    expose:
+      - "9411"
+
+    networks:
+      - shared-network
+      - blue-network
+      - green-network
 
   # Eureka Blue
   eureka-server-blue:
@@ -235,9 +278,11 @@ services:
     environment:
       EUREKA_SERVER_URL: http://eureka-server-blue:19000/eureka/
       JWT_SECRET: ${JWT_SECRET}
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
 
     expose:
       - "19001"
+      - "19091"
 
     depends_on:
       - eureka-server-blue
@@ -257,9 +302,11 @@ services:
     environment:
       EUREKA_SERVER_URL: http://eureka-server-green:19000/eureka/
       JWT_SECRET: ${JWT_SECRET}
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
 
     expose:
       - "19001"
+      - "19091"
 
     depends_on:
       - eureka-server-green
@@ -291,6 +338,8 @@ services:
       EUREKA_PREFER_IP_ADDRESS: "false"
 
       JWT_SECRET: ${JWT_SECRET}
+
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
 
     expose:
       - "19010"
@@ -334,6 +383,8 @@ services:
 
       JWT_SECRET: ${JWT_SECRET}
 
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+
     expose:
       - "19010"
 
@@ -370,6 +421,9 @@ services:
       EUREKA_INSTANCE_HOSTNAME: health-service-blue
       EUREKA_SERVER_URL: http://eureka-server-blue:19000/eureka/
       EUREKA_PREFER_IP_ADDRESS: "false"
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
 
     expose:
       - "19011"
@@ -405,6 +459,9 @@ services:
       EUREKA_INSTANCE_HOSTNAME: health-service-green
       EUREKA_SERVER_URL: http://eureka-server-green:19000/eureka/
       EUREKA_PREFER_IP_ADDRESS: "false"
+      GEMINI_API_KEY: ${GEMINI_API_KEY}
+
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
 
     expose:
       - "19011"
@@ -443,6 +500,8 @@ services:
       EUREKA_INSTANCE_HOSTNAME: game-service-blue
       EUREKA_SERVER_URL: http://eureka-server-blue:19000/eureka/
       EUREKA_PREFER_IP_ADDRESS: "false"
+
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
 
     expose:
       - "19012"
@@ -484,6 +543,8 @@ services:
       EUREKA_SERVER_URL: http://eureka-server-green:19000/eureka/
       EUREKA_PREFER_IP_ADDRESS: "false"
 
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+
     expose:
       - "19012"
 
@@ -501,11 +562,77 @@ services:
       - green-network
       - shared-network
 
+  # Notification Blue
+  notification-service-blue:
+    build:
+      context: ./deploy/blue/notification
+      dockerfile: ../../Dockerfile
+
+    container_name: rp-gym-notification-blue
+    restart: unless-stopped
+
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+      EUREKA_INSTANCE_HOSTNAME: notification-service-blue
+      EUREKA_SERVER_URL: http://eureka-server-blue:19000/eureka/
+      EUREKA_PREFER_IP_ADDRESS: "false"
+
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+
+    expose:
+      - "19013"
+
+    depends_on:
+      eureka-server-blue:
+        condition: service_started
+      kafka:
+        condition: service_started
+
+    networks:
+      - blue-network
+      - shared-network
+
+  # Notification Green
+  notification-service-green:
+    build:
+      context: ./deploy/green/notification
+      dockerfile: ../../Dockerfile
+
+    container_name: rp-gym-notification-green
+    restart: unless-stopped
+
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
+      EUREKA_INSTANCE_HOSTNAME: notification-service-green
+      EUREKA_SERVER_URL: http://eureka-server-green:19000/eureka/
+      EUREKA_PREFER_IP_ADDRESS: "false"
+
+      ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+
+    expose:
+      - "19013"
+
+    depends_on:
+      eureka-server-green:
+        condition: service_started
+      kafka:
+        condition: service_started
+
+    networks:
+      - green-network
+      - shared-network
+
   # Nginx
   nginx:
-    image: nginx:latest
+    image: nginx:1.31.6
     container_name: rp-gym-nginx
     restart: unless-stopped
+
+    environment:
+      ZIPKIN_UI_USER: ${ZIPKIN_UI_USER}
+      ZIPKIN_UI_PASSWORD_HASH: ${ZIPKIN_UI_PASSWORD_HASH}
 
     ports:
       - "80:80"
@@ -513,6 +640,7 @@ services:
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/service-url.inc:/etc/nginx/conf.d/service-url.inc:ro
+      - ./nginx/docker-entrypoint.d/40-zipkin-htpasswd.sh:/docker-entrypoint.d/40-zipkin-htpasswd.sh:ro
 
     networks:
       - blue-network

@@ -89,7 +89,7 @@ services:
 
   # redis
   redis:
-    image: redis:latest
+    image: redis:8.8.2
     container_name: rp-gym-redis
     restart: unless-stopped
     ports:
@@ -103,12 +103,115 @@ services:
     networks:
       - app-network
 
+  # Prometheus
+  prometheus:
+    image: prom/prometheus:v3.14.0
+    container_name: rp-gym-prometheus
+    restart: unless-stopped
+
+    volumes:
+      - ./monitoring/prometheus/prometheus-develop.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    ports:
+      - "9091:9090"
+
+    networks:
+      - app-network
+
+  # Grafana
+  grafana:
+    image: grafana/grafana:13.2.2
+    container_name: rp-gym-grafana
+    restart: unless-stopped
+
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+
+    ports:
+      - "3000:3000"
+
+    depends_on:
+      prometheus:
+        condition: service_healthy
+      loki:
+        condition: service_healthy
+
+    networks:
+      - app-network
+
+  # Loki
+  loki:
+    image: grafana/loki:3.7.0
+    container_name: rp-gym-loki
+    restart: unless-stopped
+
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+
+    ports:
+      - "3100:3100"
+
+    healthcheck:
+      test: ["CMD", "/usr/bin/loki", "-health"]
+      start_period: 30s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - app-network
+
+  # Grafana Alloy
+  alloy:
+    image: grafana/alloy:v1.19.2
+    container_name: rp-gym-alloy
+    restart: unless-stopped
+
+    volumes:
+      - ./monitoring/alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy-data:/var/lib/alloy/data
+
+    depends_on:
+      loki:
+        condition: service_healthy
+
+    networks:
+      - app-network
+
+  # Zipkin
+  zipkin:
+    image: openzipkin/zipkin:3.6.1
+    container_name: rp-gym-zipkin
+    restart: unless-stopped
+    environment:
+      # 인메모리 저장 상한 (기본값 유지) - 부하테스트 중 OOM/메모리 급증 방지
+      MEM_MAX_SPANS: ${ZIPKIN_MEM_MAX_SPANS:-500000}
+    ports:
+      - "9411:9411"
+    networks:
+      - app-network
+
 volumes:
   kafka-data:
   redis-data:
   postgres-user-data:
   postgres-health-data:
   postgres-game-data:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  alloy-data:
 
 networks:
   app-network:

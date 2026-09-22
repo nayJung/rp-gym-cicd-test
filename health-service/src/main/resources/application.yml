@@ -61,6 +61,17 @@ spring:
       # 날짜/시각을 epoch 숫자가 아닌 ISO-8601 문자열로 직렬화
       write-dates-as-timestamps: false
 
+  task:
+    execution:
+      shutdown:
+        # 배포(blue/green 전환 등)로 인스턴스가 종료될 때,
+        # 진행 중인 @Async 작업(QuestSuggestionEventListener의 Gemini 호출 등)이
+        # 끝날 때까지 최대 15초 기다린 뒤 종료한다.
+        # 이 시간 안에 못 끝내면 어차피 강제 종료되며, 그 경우 발생하는
+        # 이벤트 유실은 #97의 30분 반복 제안 정책으로 자연 복구된다.
+        await-termination: true
+        await-termination-period: 15s
+
   cloud:
     openfeign:
       client:
@@ -86,6 +97,23 @@ rpgym:
     # 소비 순서가 뒤집힌다. (Quest baseline이 옛날 누적값으로 고정되는 문제)
     topic: health.events
     dlq-suffix: .dlq
+
+    # 미발행/실패 적체 지표 갱신 주기 (ms)
+    # 매 폴링마다 count 쿼리를 돌리면 낭비이므로 별도 주기로 둔다
+    backlog-refresh-interval: 30000
+
+    cleanup:
+      # 정리 배치 사용 여부. 끄면 스케줄러 빈 자체가 생성되지 않는다
+      enabled: true
+      # 매일 04:10 (KST). 트래픽이 가장 적은 시간대
+      cron: "0 10 4 * * *"
+      # 발행 완료 후 이 기간이 지난 행을 삭제한다
+      retention: 7d
+      # 한 트랜잭션에서 삭제할 건수. 크면 락 점유가 길어진다
+      batch-size: 500
+      # 1회 실행 시간 상한. 건수가 아니라 시간으로 끊는다.
+      # 건수로 끊으면 하루 유입량이 상한보다 많을 때 영영 따라잡지 못한다.
+      max-run-duration: 10m
   synthetic:
     # 기본 비활성. 로컬에서 확인할 때만 켠다.
     enabled: false
@@ -122,5 +150,14 @@ management:
     web:
       exposure:
         # HTTP로 노출할 Actuator Endpoint
-        # health: 애플리케이션 상태 확인, info: 애플리케이션 정보 확인, prometheus: 메트릭 수집용
-        include: health, info, prometheus
+        # health: 애플리케이션 상태 확인, prometheus: 메트릭 수집용
+        include: health, prometheus
+
+  tracing:
+    sampling:
+      # 로컬에서는 모든 요청을 trace 대상으로 잡음
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
