@@ -99,7 +99,7 @@ public class DailyHealthSummary extends BaseCreatedUpdatedEntity {
     }
 
     public boolean markAllGoalsAchieved(Instant now) {
-        if (this.achievedAt != null) {
+        if (this.achievedAt != null || this.failedAt != null) {
             return false;
         }
         this.allGoalsAchieved = true;
