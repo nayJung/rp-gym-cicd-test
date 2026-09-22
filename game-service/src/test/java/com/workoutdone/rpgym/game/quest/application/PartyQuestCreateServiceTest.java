@@ -33,6 +33,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -185,12 +186,12 @@ class PartyQuestCreateServiceTest {
     }
 
     @Test
-    @DisplayName("소속된 파티가 없으면 만들지 않는다")
-    void 파티가_없으면_막는다() {
+    @DisplayName("소속된 파티가 없으면 파티 쪽 예외가 그대로 올라간다 — 잡으면 롤백 전용 플래그가 남는다")
+    void 파티가_없으면_예외가_올라간다() {
         when(partyQueryService.getMyParty(OWNER))
                 .thenThrow(new PartyException(PartyErrorCode.NOT_IN_PARTY));
 
-        assertEquals(PartyQuestCreation.Reason.NOT_A_MEMBER, reasonOf(service.create(validCommand())));
+        assertThrows(PartyException.class, () -> service.create(validCommand()));
 
         verify(partyQuestRepository, never()).save(any());
     }
