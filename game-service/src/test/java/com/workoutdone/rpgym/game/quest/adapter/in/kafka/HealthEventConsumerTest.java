@@ -97,7 +97,7 @@ class HealthEventConsumerTest {
                 """);
 
         ArgumentCaptor<QuestSuggestionCommand> captor = ArgumentCaptor.forClass(QuestSuggestionCommand.class);
-        verify(questSuggestionService).accept(captor.capture());
+        verify(questSuggestionService).store(captor.capture());
 
         QuestSuggestionCommand command = captor.getValue();
         assertThat(command.userId()).isEqualTo(USER_ID);
