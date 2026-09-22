@@ -1,5 +1,13 @@
 package com.workoutdone.rpgym.game.quest.application;
 
+import com.workoutdone.rpgym.game.party.application.PartyErrorCode;
+import com.workoutdone.rpgym.game.party.application.PartyException;
+import com.workoutdone.rpgym.game.party.application.PartyQueryService;
+import com.workoutdone.rpgym.game.party.application.view.PartyView;
+import com.workoutdone.rpgym.game.party.domain.MemberRole;
+import com.workoutdone.rpgym.game.party.domain.PartyMetric;
+import com.workoutdone.rpgym.game.party.domain.PartyStatus;
+import com.workoutdone.rpgym.game.party.domain.PartyVisibility;
 import com.workoutdone.rpgym.game.quest.domain.Metric;
 import com.workoutdone.rpgym.game.quest.domain.QuestStatus;
 import com.workoutdone.rpgym.game.quest.domain.aggregate.PartyQuest;
@@ -43,6 +51,7 @@ class PartyQuestCreateServiceTest {
     private PartyQuestRepository partyQuestRepository;
     private PartyQuestMemberRepository memberRepository;
     private UserLatestSnapshotRepository snapshotRepository;
+    private PartyQueryService partyQueryService;
     private PartyQuestCreateService service;
 
     @BeforeEach
@@ -50,9 +59,13 @@ class PartyQuestCreateServiceTest {
         partyQuestRepository = mock(PartyQuestRepository.class);
         memberRepository = mock(PartyQuestMemberRepository.class);
         snapshotRepository = mock(UserLatestSnapshotRepository.class);
+        partyQueryService = mock(PartyQueryService.class);
         service = new PartyQuestCreateService(
-                partyQuestRepository, memberRepository, snapshotRepository, new RewardPolicy());
+                partyQuestRepository, memberRepository, snapshotRepository,
+                partyQueryService, new RewardPolicy());
 
+        when(partyQueryService.getMyParty(OWNER)).thenReturn(
+                party(PartyStatus.ACTIVE, PartyMetric.STEPS, OWNER, List.of(OWNER, MEMBER_B, MEMBER_C, MEMBER_D)));
         when(partyQuestRepository.existsActiveByPartyId(any(), any())).thenReturn(false);
         when(partyQuestRepository.save(any())).thenAnswer(call -> call.getArgument(0));
         when(memberRepository.saveAll(any())).thenAnswer(call -> call.getArgument(0));
@@ -61,17 +74,27 @@ class PartyQuestCreateServiceTest {
                 snapshotOf(OWNER, 3000), snapshotOf(MEMBER_B, 1200), snapshotOf(MEMBER_C, 500)));
     }
 
+    private PartyView party(PartyStatus status, PartyMetric metric, UUID ownerId, List<UUID> memberIds) {
+        List<PartyView.MemberView> members = memberIds.stream()
+                .map(id -> new PartyView.MemberView(
+                        id, id.equals(ownerId) ? MemberRole.OWNER : MemberRole.MEMBER, Instant.now()))
+                .toList();
+        return new PartyView(
+                PARTY_ID, "퇴근길 파티", ownerId, status, PartyVisibility.PUBLIC, metric,
+                members.size(), 4, null, Instant.now().plusSeconds(86400), Instant.now(), members);
+    }
+
     private UserLatestSnapshot snapshotOf(UUID userId, int steps) {
         return UserLatestSnapshot.create(userId,
                 new Snapshot(LocalDate.now(KST), Instant.now(), steps, 0, 0));
     }
 
-    private PartyQuestCreateCommand command(String title, String metric, int target, List<UUID> members) {
-        return new PartyQuestCreateCommand(PARTY_ID, OWNER, title, metric, target, members);
+    private PartyQuestCreateCommand command(String title, int target) {
+        return new PartyQuestCreateCommand(PARTY_ID, OWNER, title, target);
     }
 
     private PartyQuestCreateCommand validCommand() {
-        return command("퇴근길 함께 4000보", "STEPS", 4000, List.of(OWNER, MEMBER_B, MEMBER_C, MEMBER_D));
+        return command("퇴근길 함께 4000보", 4000);
     }
 
     private static PartyQuestCreation.Reason reasonOf(PartyQuestCreation creation) {
@@ -94,6 +117,31 @@ class PartyQuestCreateServiceTest {
         assertEquals(500, members.get(2).getBaselineVal());
         // 모두 기여 0 에서 시작한다
         assertEquals(0, members.get(0).getContributedVal());
+    }
+
+    @Test
+    @DisplayName("명단은 요청이 아니라 파티에서 온다 — 요청자가 보낸 명단으로 인가를 검사할 수 없다")
+    void 명단은_파티에서_온다() {
+        ArgumentCaptor<List<PartyQuestMember>> saved = ArgumentCaptor.forClass(List.class);
+
+        service.create(validCommand());
+
+        verify(memberRepository).saveAll(saved.capture());
+        assertEquals(List.of(OWNER, MEMBER_B, MEMBER_C, MEMBER_D),
+                saved.getValue().stream().map(PartyQuestMember::getUserId).toList());
+    }
+
+    @Test
+    @DisplayName("지표도 파티에서 온다 — 파티장이 다시 고를 수 없다")
+    void 지표는_파티에서_온다() {
+        when(partyQueryService.getMyParty(OWNER)).thenReturn(
+                party(PartyStatus.ACTIVE, PartyMetric.ACTIVE_MINUTES, OWNER, List.of(OWNER, MEMBER_B)));
+        ArgumentCaptor<PartyQuest> saved = ArgumentCaptor.forClass(PartyQuest.class);
+
+        service.create(validCommand());
+
+        verify(partyQuestRepository).save(saved.capture());
+        assertEquals(Metric.ACTIVE_MINUTES, saved.getValue().getMetric());
     }
 
     @Test
@@ -137,14 +185,68 @@ class PartyQuestCreateServiceTest {
     }
 
     @Test
-    @DisplayName("인원이 없거나 정원을 넘으면 만들지 않는다")
-    void 인원_수가_틀리면_막는다() {
-        assertEquals(PartyQuestCreation.Reason.INVALID_MEMBERS,
-                reasonOf(service.create(command("제목", "STEPS", 4000, List.of()))));
+    @DisplayName("소속된 파티가 없으면 만들지 않는다")
+    void 파티가_없으면_막는다() {
+        when(partyQueryService.getMyParty(OWNER))
+                .thenThrow(new PartyException(PartyErrorCode.NOT_IN_PARTY));
 
-        assertEquals(PartyQuestCreation.Reason.INVALID_MEMBERS,
-                reasonOf(service.create(command("제목", "STEPS", 4000,
-                        List.of(OWNER, MEMBER_B, MEMBER_C, MEMBER_D, UUID.randomUUID())))));
+        assertEquals(PartyQuestCreation.Reason.NOT_A_MEMBER, reasonOf(service.create(validCommand())));
+
+        verify(partyQuestRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("남의 파티 아이디를 보내면 만들지 않는다 — 자기 파티가 아니면 거기서 끝난다")
+    void 남의_파티는_못_만든다() {
+        PartyQuestCreateCommand otherParty =
+                new PartyQuestCreateCommand(UUID.randomUUID(), OWNER, "제목", 4000);
+
+        assertEquals(PartyQuestCreation.Reason.NOT_A_MEMBER, reasonOf(service.create(otherParty)));
+
+        verify(partyQuestRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("파티원이지만 파티장이 아니면 만들지 않는다")
+    void 파티장이_아니면_막는다() {
+        when(partyQueryService.getMyParty(OWNER)).thenReturn(
+                party(PartyStatus.ACTIVE, PartyMetric.STEPS, MEMBER_B, List.of(MEMBER_B, OWNER)));
+
+        assertEquals(PartyQuestCreation.Reason.NOT_OWNER, reasonOf(service.create(validCommand())));
+
+        verify(partyQuestRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("모집 중이면 만들지 않는다 — 뒤에 들어온 멤버가 명단에 없는 채로 남는다")
+    void 모집_중이면_막는다() {
+        when(partyQueryService.getMyParty(OWNER)).thenReturn(
+                party(PartyStatus.RECRUITING, PartyMetric.STEPS, OWNER, List.of(OWNER, MEMBER_B)));
+
+        assertEquals(PartyQuestCreation.Reason.PARTY_NOT_ACTIVE, reasonOf(service.create(validCommand())));
+
+        verify(partyQuestRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("이미 끝난 파티에도 만들지 않는다")
+    void 끝난_파티면_막는다() {
+        when(partyQueryService.getMyParty(OWNER)).thenReturn(
+                party(PartyStatus.ENDED, PartyMetric.STEPS, OWNER, List.of(OWNER, MEMBER_B)));
+
+        assertEquals(PartyQuestCreation.Reason.PARTY_NOT_ACTIVE, reasonOf(service.create(validCommand())));
+
+        verify(partyQuestRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("파티 인원이 정원을 넘으면 만들지 않는다 — 멤버 행이 다섯이면 XP 가 다섯 번 나간다")
+    void 정원을_넘으면_막는다() {
+        when(partyQueryService.getMyParty(OWNER)).thenReturn(
+                party(PartyStatus.ACTIVE, PartyMetric.STEPS, OWNER,
+                        List.of(OWNER, MEMBER_B, MEMBER_C, MEMBER_D, UUID.randomUUID())));
+
+        assertEquals(PartyQuestCreation.Reason.INVALID_MEMBERS, reasonOf(service.create(validCommand())));
 
         verify(partyQuestRepository, never()).save(any());
     }
@@ -152,44 +254,29 @@ class PartyQuestCreateServiceTest {
     @Test
     @DisplayName("같은 사람이 두 번 들어 있으면 만들지 않는다 — 멤버 행 유니크 제약보다 먼저 답한다")
     void 중복_멤버를_막는다() {
-        assertEquals(PartyQuestCreation.Reason.INVALID_MEMBERS,
-                reasonOf(service.create(command("제목", "STEPS", 4000, List.of(OWNER, OWNER)))));
+        when(partyQueryService.getMyParty(OWNER)).thenReturn(
+                party(PartyStatus.ACTIVE, PartyMetric.STEPS, OWNER, List.of(OWNER, OWNER)));
+
+        assertEquals(PartyQuestCreation.Reason.INVALID_MEMBERS, reasonOf(service.create(validCommand())));
 
         verify(partyQuestRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("요청자가 명단에 없으면 만들지 않는다")
-    void 남의_파티_퀘스트는_못_만든다() {
-        assertEquals(PartyQuestCreation.Reason.NOT_A_MEMBER,
-                reasonOf(service.create(command("제목", "STEPS", 4000, List.of(MEMBER_B, MEMBER_C)))));
-
-        verify(partyQuestRepository, never()).save(any());
-    }
-
-    @Test
-    @DisplayName("지표가 세 종류 밖이면 만들지 않는다")
-    void 지표가_틀리면_막는다() {
-        assertEquals(PartyQuestCreation.Reason.UNKNOWN_METRIC,
-                reasonOf(service.create(command("제목", "SLEEP_HOURS", 4000,
-                        List.of(OWNER, MEMBER_B)))));
     }
 
     @Test
     @DisplayName("목표가 0 이하면 만들지 않는다 — 첫 스냅샷에서 바로 완료되어 XP가 공짜로 나간다")
     void 목표가_0_이하면_막는다() {
         assertEquals(PartyQuestCreation.Reason.INVALID_TARGET,
-                reasonOf(service.create(command("제목", "STEPS", 0, List.of(OWNER, MEMBER_B)))));
+                reasonOf(service.create(command("제목", 0))));
     }
 
     @Test
     @DisplayName("제목이 비었거나 100자를 넘으면 만들지 않는다 — 사람이 입력한 값이라 자르지 않고 거절한다")
     void 제목이_틀리면_막는다() {
         assertEquals(PartyQuestCreation.Reason.INVALID_TITLE,
-                reasonOf(service.create(command("  ", "STEPS", 4000, List.of(OWNER)))));
+                reasonOf(service.create(command("  ", 4000))));
 
         assertEquals(PartyQuestCreation.Reason.INVALID_TITLE,
-                reasonOf(service.create(command("가".repeat(101), "STEPS", 4000, List.of(OWNER)))));
+                reasonOf(service.create(command("가".repeat(101), 4000))));
     }
 
     @Test
