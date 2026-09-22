@@ -3,6 +3,7 @@ package com.workoutdone.rpgym.health.activity.application;
 import com.workoutdone.rpgym.health.activity.domain.ActivitySource;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 /** web dto가 application 계층으로 새어 들어오지 않도록 하는 입력 모델
@@ -17,4 +18,16 @@ public record SyncHealthActivityCommand(
         int activeCalories,
         ActivitySource source
 ) {
+    /**
+     * measuredAt을 초 단위로 절삭한다.
+     *
+     * measuredAt은 (user_id, measured_at) 유니크 키의 일부라, 기기가 밀리초까지 보내면
+     * 같은 시점의 재전송도 매번 다른 행이 되어 멱등 처리와 재동기화 경로가 동작하지 않는다.
+     * 어댑터마다 절삭하지 않고 여기서 한 번에 맞춰, 수집 채널과 관계없이 같은 기준을 갖게 한다.
+     */
+    public SyncHealthActivityCommand {
+        if (measuredAt != null) {
+            measuredAt = measuredAt.truncatedTo(ChronoUnit.SECONDS);
+        }
+    }
 }
