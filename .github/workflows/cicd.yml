@@ -278,6 +278,8 @@ jobs:
           ZIPKIN_UI_PASSWORD_HASH: ${{ secrets.ZIPKIN_UI_PASSWORD_HASH }}
           GRAFANA_ROOT_URL: ${{ secrets.GRAFANA_ROOT_URL }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_SIGNING_SECRET: ${{ secrets.SLACK_SIGNING_SECRET }}
         run: |
           ENV_FILE="$(mktemp)"
           trap 'rm -f "$ENV_FILE"' EXIT
@@ -290,6 +292,8 @@ jobs:
             ZIPKIN_UI_PASSWORD_HASH
             GRAFANA_ROOT_URL
             SLACK_WEBHOOK_URL
+            SLACK_BOT_TOKEN
+            SLACK_SIGNING_SECRET
           )
 
           # 필수 Secret 누락 및 작은따옴표 포함 여부 검증
