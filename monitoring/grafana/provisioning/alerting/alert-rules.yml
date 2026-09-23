@@ -1,0 +1,71 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: spring-boot-cpu-alerts
+    folder: RPGym Monitoring
+
+    # 1분마다 CPU 상태 평가
+    interval: 1m
+
+    rules:
+      - uid: spring-boot-cpu-high
+        title: Spring Boot CPU High
+        condition: C
+
+        data:
+          # Spring Boot 프로세스 CPU 사용률 조회
+          # uid가 prometheus인 데이터소스에서 process_cpu_usage를 조회
+          - refId: A
+            datasourceUid: prometheus
+            relativeTimeRange:
+              from: 300
+              to: 0
+            model:
+              expr: process_cpu_usage
+              instant: true
+              intervalMs: 60000
+              maxDataPoints: 43200
+              refId: A
+
+          # 각 서비스의 마지막 CPU 값 사용
+          - refId: B
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              expression: A
+              reducer: last
+              refId: B
+              type: reduce
+
+          # CPU 사용률 50% 초과 여부 판단
+          - refId: C
+            datasourceUid: __expr__
+            relativeTimeRange:
+              from: 0
+              to: 0
+            model:
+              expression: B
+              conditions:
+                - evaluator:
+                    params:
+                      - 0.5
+                    type: gt
+              refId: C
+              type: threshold
+
+        noDataState: NoData
+        execErrState: Error
+
+        # 50% 초과 상태가 5분 지속되면 Firing
+        for: 5m
+
+        labels:
+          severity: warning
+          alertname: spring-boot-cpu-high
+
+        annotations:
+          summary: "Spring Boot 프로세스 CPU 사용률 50% 초과"
+          description: "CPU 사용률이 5분 이상 50%를 초과했습니다."
