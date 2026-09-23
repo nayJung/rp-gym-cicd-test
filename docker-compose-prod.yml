@@ -173,10 +173,16 @@ services:
       GF_SERVER_ROOT_URL: "${GRAFANA_ROOT_URL}"
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
 
+      # Slack Alerting에서 사용할 Webhook URL
+      SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL}"
+
     volumes:
       - grafana-data:/var/lib/grafana
       - ./monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       - ./monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+
+      # Grafana Alerting 설정
+      - ./monitoring/grafana/provisioning/alerting:/etc/grafana/provisioning/alerting:ro
 
     expose:
       - "3000"
