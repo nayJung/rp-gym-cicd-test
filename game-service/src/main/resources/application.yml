@@ -200,3 +200,6 @@ rpgym:
       poll-size: 100
       send-timeout: 5s
       escalate-after: 10
+
+springdoc:
+  paths-to-exclude: /api/*/internal/**

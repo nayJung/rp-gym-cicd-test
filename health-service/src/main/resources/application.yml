@@ -186,3 +186,6 @@ management:
       maximum-expected-value:
         rpgym.outbox.lag: 30s
         rpgym.outbox.publish.duration: 10s
+
+springdoc:
+  paths-to-exclude: /api/*/internal/**
