@@ -60,6 +60,9 @@ dependencies {
     compileOnly 'org.projectlombok:lombok'
     annotationProcessor 'org.projectlombok:lombok'
 
+    // ── OpenAPI ─────────────────────────────────────────────────────────
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-api'
+
     // ── 테스트 ─────────────────────────────────────────────────────────
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'com.h2database:h2'
