@@ -56,6 +56,10 @@ class HealthSummarySyncServiceTest {
     void setUp() {
         given(summaryRepository.save(any())).willAnswer(invocation -> invocation.getArgument(0));
         given(progressRepository.saveAll(any())).willAnswer(invocation -> invocation.getArgument(0));
+
+        service = new HealthSummarySyncService(
+                summaryRepository, progressRepository, eventPublisher, userServiceClient, eventOutboxPort, Clock.systemUTC()
+        );
     }
 
     private void useClock(Instant fixedNow) {
@@ -197,7 +201,7 @@ class HealthSummarySyncServiceTest {
     @Test
     void 정정_동기화로_어제_날짜가_들어오면_Quest_제안을_건너뛴다() {
         LocalDate yesterday = activityDate;
-        Instant lateNightToday = Instant.parse("2026-08-31T15:30:00Z");
+        Instant lateNightToday = Instant.parse("2026-08-30T15:30:00Z");
         useClock(lateNightToday);
         DailyHealthSummary summary = DailyHealthSummary.createFor(userId, yesterday, lateNightToday);
 
