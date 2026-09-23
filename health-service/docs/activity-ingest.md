@@ -88,6 +88,7 @@ Outbox `dedup_key`가 `(userId, measuredAt)` 단위이고, Game Service도 `meas
    Game의 활성 퀘스트 조회 조건이 `expiredAt > measuredAt`(초과)이고 퀘스트 만료 시각이 `23:59:59`라, 정확히 `23:59:59`면 어제 퀘스트를 찾지 못한다.
 2. 어제 마지막으로 보낸 `measuredAt`보다 **늦어야** 한다. 같거나 이르면 `STALE_SNAPSHOT`으로 무시된다.
 3. 값이 바뀌었으므로 재집계 규약대로 **새 `measuredAt`**이어야 한다.
+4. **Health의 실패 확정 배치(매일 00:05 KST)보다 먼저 도착해야** 일일 목표 달성과 업적에 반영된다. 그 이후 도착하면 Quest는 완료되지만 일일 목표는 실패로 남는다 (아래 주의 참고).
 
 **이 동작이 성립하는 이유 (game-service 기준)**
 - `lastAppliedMeasuredAt`은 사용자 단위가 아니라 **퀘스트 단위**다. 오늘 이벤트가 먼저 처리돼도 어제 퀘스트의 기준 시각은 바뀌지 않는다.
@@ -100,7 +101,10 @@ Outbox `dedup_key`가 `(userId, measuredAt)` 단위이고, Game Service도 `meas
 - 늦은 데이터를 받는 기한이 양쪽 서비스 모두 없다. 앱 구현 시 "어제까지만 허용" 같은 과거 쪽 경계를 입력 검증에 두는 것을 검토한다 (`@NotFutureMeasuredAt`과 짝).
 - Health의 `DailyGoalFailureScheduler`는 매일 00:05에 어제 일일 목표를 실패로 확정한다(`failedAt`). 이후 도착한 어제 데이터도 `applySync`로 합계·진행도는 갱신된다.
   - `markAllGoalsAchieved`가 `failedAt`도 확인하므로, 00:05 이후에 어제 목표를 채워도 달성 처리와 `DAILY_GOAL_COMPLETED` 발행은 일어나지 않는다. `achievedAt`과 `failedAt`이 동시에 채워지는 모순 상태를 막기 위한 결정이다.
-  - 그 결과 00:05 이후 도착한 어제 데이터는 **Game에서는 퀘스트 완료, Health에서는 일일 목표 실패**로 판정이 갈릴 수 있다. 현재 `DAILY_GOAL_COMPLETED`를 처리하는 소비자가 없어 보상 영향은 없으며, 소비자를 추가할 때 이 차이를 고려한다.
+  - 그 결과 00:05 이후 도착한 어제 데이터는 **Game에서는 퀘스트 완료, Health에서는 일일 목표 실패**로 판정이 갈릴 수 있다.
+  - 이 차이는 업적에 영향을 준다. game-service의 업적 컨슈머(#132)가 `DAILY_GOAL_COMPLETED`로 `DAILY_GOAL_COUNT`와 `DAILY_GOAL_STREAK`를 세는데, 발행되지 않은 날은 통째로 빠진다. 특히 연속 달성은 하루가 비면 1부터 다시 세므로(`UserAchievement.isConsecutive`) 그동안 쌓인 기록이 사라진다.
+  - Health가 늦은 달성을 인정하도록 바꾸더라도 업적에는 반영되지 않는다. `UserAchievement.count`가 `activityDate <= lastCountedDate`면 건너뛰므로, 오늘 이벤트가 먼저 처리된 뒤 도착한 어제 이벤트는 버려진다. 해소하려면 Health Summary와 Achievement 양쪽을 함께 봐야 한다.
+  - 판정 기준(실패 확정 시각, 업적의 날짜 가드)은 Health Summary·Achievement 도메인 결정 사항이라 담당자에게 공유했다. Activity 도메인은 결정에 맞춰 위 "지켜야 할 조건 4"의 시각만 갱신한다.
   - ** `publishDeficientGoalEventIfNeeded`가 날짜를 확인하지 않아, 미달인 어제 데이터가 오면 어제 날짜로 퀘스트 제안(Gemini 호출)이 나가고 Game에서 `SNAPSHOT_MISMATCH`로 거부되거나 이미 만료된 퀘스트가 생성된다. `activityDate`가 오늘(KST)이 아니면 제안을 건너뛰도록 했다.
 
 ## 범위 밖 (의도적으로 제외)
