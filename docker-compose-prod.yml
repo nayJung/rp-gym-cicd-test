@@ -694,6 +694,9 @@ services:
 
       ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
 
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET}
+
     expose:
       - "19013"
 
@@ -738,6 +741,9 @@ services:
       EUREKA_PREFER_IP_ADDRESS: "false"
 
       ZIPKIN_ENDPOINT: http://zipkin:9411/api/v2/spans
+
+      SLACK_BOT_TOKEN: ${SLACK_BOT_TOKEN}
+      SLACK_SIGNING_SECRET: ${SLACK_SIGNING_SECRET}
 
     expose:
       - "19013"
