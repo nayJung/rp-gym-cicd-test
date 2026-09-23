@@ -202,6 +202,7 @@ class HealthSummarySyncServiceTest {
     void 정정_동기화로_어제_날짜가_들어오면_Quest_제안을_건너뛴다() {
         LocalDate yesterday = activityDate;
         Instant lateNightToday = Instant.parse("2026-08-30T15:30:00Z");
+        Instant measuredAtWithinYesterday = Instant.parse("2026-08-30T14:59:00Z");
         useClock(lateNightToday);
         DailyHealthSummary summary = DailyHealthSummary.createFor(userId, yesterday, lateNightToday);
 
@@ -217,7 +218,7 @@ class HealthSummarySyncServiceTest {
         given(progressRepository.findBySummaryId(summaryId)).willReturn(progresses);
 
         SyncedActivity syncedActivity = new SyncedActivity(
-                activityId, userId, yesterday, lateNightToday, 1000, 10, 50
+                activityId, userId, yesterday, measuredAtWithinYesterday, 1000, 10, 50
         );
 
         service.sync(syncedActivity);

@@ -108,7 +108,7 @@ public class HealthSummarySyncService {
          * 자정 이후 "어제" 범위를 재집계해서 어제 날짜(activityDate)로 보내는
          * 정정 동기화(#124, 외부 기기 수집 경로의 자정 직전 정정 누락 보완 규약)는
          * Quest 제안 대상이 아니다. Game Service는 오늘 발급된 퀘스트만 기대하므로,
-         * 어제 날짜 기준으로 제안하면 SNAPSHOT_MISMATCH로 거부되거나 이미 만료된
+         * * 어제 날짜 기준으로 제안하면 SUGGESTION_DATE_MISMATCH로 거부되거나 이미 만료된
          * 퀘스트가 생성될 수 있다.
          */
         LocalDate today = now.atZone(KST).toLocalDate();
