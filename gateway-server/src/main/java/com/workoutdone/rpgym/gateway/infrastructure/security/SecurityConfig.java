@@ -52,7 +52,8 @@ public class SecurityConfig {
                                 "/actuator/prometheus",
                                 "/swagger-ui.html",
                                 "/swagger-ui/**",
-                                "/v3/api-docs/**"
+                                "/v3/api-docs/**",
+                                "/webjars/**"
                         ).permitAll()
 
                         .pathMatchers(
