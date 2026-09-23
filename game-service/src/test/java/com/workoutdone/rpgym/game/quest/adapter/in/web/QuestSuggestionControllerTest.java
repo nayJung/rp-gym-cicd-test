@@ -31,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({GameExceptionHandler.class, GlobalExceptionHandler.class})
 class QuestSuggestionControllerTest {
 
-    private static final String BASE_URL = "/api/v1/games/quest-suggestions";
+    private static final String BASE_URL = "/api/v2/internal/games/quest-suggestions";
     private static final UUID SUGGESTION_ID = UUID.randomUUID();
     private static final UUID USER_ID = UUID.randomUUID();
 
