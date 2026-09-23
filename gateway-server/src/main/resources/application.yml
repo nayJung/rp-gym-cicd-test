@@ -1,9 +1,15 @@
 server:
   port: 19001
+  # 종료 신호를 받으면 기존 요청이 완료될 시간을 주고, 새로운 요청은 받지 않도록 하는 방식
+  shutdown: graceful
 
 spring:
   application:
     name: gateway-server
+
+  lifecycle:
+    # Graceful Shutdown 단계별 최대 대기 시간
+    timeout-per-shutdown-phase: 30s
 
   config:
     import: optional:file:.env[.properties]
@@ -35,7 +41,7 @@ spring:
             - id: game-service
               uri: lb://game-service
               predicates:
-                - Path=/api/v1/games/**
+                - Path=/api/v1/games/**, /api/v2/games/**
 
             - id: notification-service
               uri: lb://notification-service
