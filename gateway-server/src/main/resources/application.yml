@@ -41,12 +41,41 @@ spring:
             - id: game-service
               uri: lb://game-service
               predicates:
-                - Path=/api/v1/games/**
+                - Path=/api/v1/games/**, /api/v2/games/**
 
             - id: notification-service
               uri: lb://notification-service
               predicates:
                 - Path=/api/v1/notifications/**
+
+            # OpenAPI Docs
+            - id: user-service-api-docs
+              uri: lb://user-service
+              predicates:
+                - Path=/v3/api-docs/user
+              filters:
+                - RewritePath=/v3/api-docs/user, /v3/api-docs
+
+            - id: health-service-api-docs
+              uri: lb://health-service
+              predicates:
+                - Path=/v3/api-docs/health
+              filters:
+                - RewritePath=/v3/api-docs/health, /v3/api-docs
+
+            - id: game-service-api-docs
+              uri: lb://game-service
+              predicates:
+                - Path=/v3/api-docs/game
+              filters:
+                - RewritePath=/v3/api-docs/game, /v3/api-docs
+
+            - id: notification-service-api-docs
+              uri: lb://notification-service
+              predicates:
+                - Path=/v3/api-docs/notification
+              filters:
+                - RewritePath=/v3/api-docs/notification, /v3/api-docs
 
 eureka:
   client:
@@ -83,3 +112,16 @@ management:
 
 jwt:
   secret: ${JWT_SECRET}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    urls:
+      - name: User Service
+        url: /v3/api-docs/user
+      - name: Health Service
+        url: /v3/api-docs/health
+      - name: Game Service
+        url: /v3/api-docs/game
+      - name: Notification Service
+        url: /v3/api-docs/notification

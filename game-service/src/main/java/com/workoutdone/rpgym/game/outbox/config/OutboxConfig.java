@@ -12,4 +12,9 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @EnableScheduling
 @EnableConfigurationProperties(OutboxPublishProperties.class)
 public class OutboxConfig {
+	// escalateAfter default 값은 10
+	// application.yml에 10이 있다.
+	// rpgym.outbox.escalate-after: 10
+	// retryCount >= escalaterAfter log.warn -> log.error
+	// status == PENDING
 }

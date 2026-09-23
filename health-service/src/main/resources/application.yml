@@ -1,9 +1,15 @@
 server:
   port: 19011
+  # 종료 신호를 받으면 기존 요청이 완료될 시간을 주고, 새로운 요청은 받지 않도록 하는 방식
+  shutdown: graceful
 
 spring:
   application:
     name: health-service
+
+  lifecycle:
+    # Graceful Shutdown 단계별 최대 대기 시간
+    timeout-per-shutdown-phase: 30s
 
   config:
     # 서비스 디렉터리의 .env를 프로퍼티 파일로 읽는다.
@@ -92,10 +98,14 @@ rpgym:
     max-retry: 5
     # Kafka 발행 응답 대기 시간
     send-timeout: 5s
-    # Health Service가 발행하는 모든 이벤트를 한 토픽으로 보낸다.
-    # 종류별로 나누면 같은 sync에서 나간 이벤트들이 서로 다른 토픽으로 흩어져
-    # 소비 순서가 뒤집힌다. (Quest baseline이 옛날 누적값으로 고정되는 문제)
+    # 발행 토픽은 이벤트 타입별로 나뉜다.
+    # HEALTH_ACTIVITY_SYNCED, QUEST_SUGGESTED: 30분마다 발행.
+    # 같은 sync에서 나간 두 이벤트가 다른 토픽으로 흩어지면 소비 순서가 뒤집혀
+    # Quest baseline이 옛날 누적값으로 고정되므로 반드시 한 토픽에 둔다.
     topic: health.events
+    # DAILY_GOAL_COMPLETED: 사용자당 하루 1번 발행. 위 순서 제약과 무관해 전용 토픽으로 분리한다.
+    daily-goal-topic: health.daily-goal.events
+    # DLQ는 각 토픽 뒤에 붙는다 (health.events.dlq, health.daily-goal.events.dlq)
     dlq-suffix: .dlq
 
     # 미발행/실패 적체 지표 갱신 주기 (ms)
@@ -176,3 +186,6 @@ management:
       maximum-expected-value:
         rpgym.outbox.lag: 30s
         rpgym.outbox.publish.duration: 10s
+
+springdoc:
+  paths-to-exclude: /api/*/internal/**

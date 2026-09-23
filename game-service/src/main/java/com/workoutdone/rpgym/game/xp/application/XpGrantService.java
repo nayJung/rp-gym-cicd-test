@@ -17,7 +17,6 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 public class XpGrantService {
-
     private final XpLedgerRepository xpLedgerRepository;
     private final WalletRepository walletRepository;
     private final ApplicationEventPublisher events;

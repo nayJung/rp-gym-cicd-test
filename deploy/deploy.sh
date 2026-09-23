@@ -146,21 +146,21 @@ EOF
             fi
         fi
 
-                echo "Nginx rollback configuration restored."
+        echo "Nginx rollback configuration restored."
 
-                # 이전 Gateway가 실제로 정상인지 확인
-                if ! wait_for_previous_gateway; then
-                    echo "Previous Gateway verification failed."
-                    return 1
-                fi
+        # 이전 Gateway가 실제로 정상인지 확인
+        if ! wait_for_previous_gateway; then
+            echo "Previous Gateway verification failed."
+            return 1
+        fi
 
-                # Nginx를 통해 이전 환경으로 실제 요청이 전달되는지 확인
-                if ! wait_for_nginx_traffic; then
-                    echo "Nginx rollback traffic verification failed."
-                    return 1
-                fi
+        # Nginx를 통해 이전 환경으로 실제 요청이 전달되는지 확인
+        if ! wait_for_nginx_traffic; then
+            echo "Nginx rollback traffic verification failed."
+            return 1
+        fi
 
-                echo "Nginx rollback success."
+        echo "Nginx rollback success."
 
     # 이전 환경이 없는 최초 배포인 경우
     else

@@ -47,8 +47,13 @@ public class SecurityConfig {
                                 "/api/v1/users/login",
                                 "/api/v1/users/signup",
                                 "/api/v1/users/refresh",
+                                "/api/v1/notifications/slack/interactions",
                                 "/actuator/health",
-                                "/actuator/prometheus"
+                                "/actuator/prometheus",
+                                "/swagger-ui.html",
+                                "/swagger-ui/**",
+                                "/v3/api-docs/**",
+                                "/webjars/**"
                         ).permitAll()
 
                         .pathMatchers(

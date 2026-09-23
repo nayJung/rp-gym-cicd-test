@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.workoutdone.rpgym.game.quest.application.QuestProgressService;
 import com.workoutdone.rpgym.game.quest.application.QuestSuggestionCommand;
+import com.workoutdone.rpgym.game.quest.application.PartyQuestProgressService;
 import com.workoutdone.rpgym.game.quest.application.QuestSuggestionService;
 import com.workoutdone.rpgym.game.quest.domain.vo.Snapshot;
 
@@ -36,13 +37,17 @@ class HealthEventConsumerTest {
 
     @Mock
     private QuestSuggestionService questSuggestionService;
+    
+    @Mock
+    private PartyQuestProgressService partyQuestProgressService;
 
     private HealthEventConsumer consumer;
 
     @BeforeEach
     void setUp() {
         ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
-        consumer = new HealthEventConsumer(objectMapper, questProgressService, questSuggestionService);
+        consumer = new HealthEventConsumer(
+                objectMapper, questProgressService, partyQuestProgressService, questSuggestionService);
     }
 
     @Test
@@ -97,7 +102,7 @@ class HealthEventConsumerTest {
                 """);
 
         ArgumentCaptor<QuestSuggestionCommand> captor = ArgumentCaptor.forClass(QuestSuggestionCommand.class);
-        verify(questSuggestionService).accept(captor.capture());
+        verify(questSuggestionService).store(captor.capture());
 
         QuestSuggestionCommand command = captor.getValue();
         assertThat(command.userId()).isEqualTo(USER_ID);

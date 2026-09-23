@@ -1,9 +1,15 @@
 server:
   port: 19012
+  # 종료 신호를 받으면 기존 요청이 완료될 시간을 주고, 새로운 요청은 받지 않도록 하는 방식
+  shutdown: graceful
 
 spring:
   application:
     name: game-service
+
+  lifecycle:
+    # Graceful Shutdown 단계별 최대 대기 시간
+    timeout-per-shutdown-phase: 30s
 
   config:
     # 실행 위치에 따라 작업 디렉터리가 다르므로 두 경로를 모두 시도한다
@@ -69,6 +75,14 @@ spring:
     listener:
       # 레코드 하나 처리할 때마다 커밋. 배치 커밋은 중간에서 죽으면 처리한 것까지 재처리된다
       ack-mode: RECORD
+      # 컨슈머 스레드 수. 토픽 파티션 수와 맞춘다.
+      # 기본값이 1이라 스레드 하나가 파티션 전부를 순서대로 처리한다.
+      # 그러면 서로 다른 유저의 이벤트도 줄을 서서 처리되고, 파티 퀘스트의 완료 선점이
+      # 한 번도 경쟁하지 않는다. 동시성 방어가 있으나 마나인 상태가 되고
+      # 실험은 통과할수 있지만 아무것도 증명할수는 없다.
+      # 파티션 하나는 여전히 스레드 하나에만 배정되므로
+      # "같은 유저의 이벤트는 순서대로 처리된다" 는 성질은 그대로 유지된다.
+      concurrency: 3 
       # Kafka 구간은 기본 설정으로 traceId가 끊긴다. 켜야 헤더로 전파된다
       observation-enabled: true
 
@@ -128,22 +142,29 @@ management:
     web:
       exposure:
         # HTTP로 노출할 Actuator Endpoint
-        # health: 상태 확인, info: 애플리케이션 정보
+        # health: 상태 확인
         # prometheus: monitoring/prometheus/prometheus.yml 이 15초마다 스크랩한다
-        include: health, info, prometheus
+        include: health, prometheus
+
+  tracing:
+    sampling:
+      # 로컬에서는 모든 요청을 trace 대상으로 잡음
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+
+  zipkin:
+    tracing:
+      endpoint: ${ZIPKIN_ENDPOINT:http://localhost:9411/api/v2/spans}
 
 rpgym:
   kafka:
     #  이벤트 계약 -- Health 3종을 한 토픽으로 통합했다
     health-events-topic: health.events
-    # 슬랙 버튼의 응답이 돌아오는 토픽. Notification 이 발행하고 game 이 구독한다 (잠정값)
-    notification-events-topic: notification.events
 
   outbox:
     # 발행 토픽. 소비 측(Notification)과 맞춰야 하는 값이라 팀 확인이 필요하다 (잠정값)
     topic: game.events
     # 폴링 주기(ms). fixedDelay 이므로 이전 라운드가 끝난 뒤부터 센다
-    poll-interval: 1000
+    poll-interval: 200
     # 한 라운드에 집을 PENDING 최대 건수
     poll-size: 100
     # Kafka 발행 응답 대기 시간
@@ -179,3 +200,6 @@ rpgym:
       poll-size: 100
       send-timeout: 5s
       escalate-after: 10
+
+springdoc:
+  paths-to-exclude: /api/*/internal/**
