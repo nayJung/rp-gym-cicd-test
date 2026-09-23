@@ -84,6 +84,7 @@ public class OutboxRelay {
              * markRetried()의 변경이 정상 커밋된다. (제약 위반 같은 DB 예외라면 반대다)
              */
             event.markRetried();
+            // 일정횟수를 넘으면 DLQ 대신에 로그 레벨을 올린다.
             logFailure(event, e);
             return false;
         }

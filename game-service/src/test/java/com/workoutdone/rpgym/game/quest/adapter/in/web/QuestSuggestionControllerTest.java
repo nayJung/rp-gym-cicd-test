@@ -31,7 +31,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({GameExceptionHandler.class, GlobalExceptionHandler.class})
 class QuestSuggestionControllerTest {
 
-    private static final String BASE_URL = "/api/v1/games/quest-suggestions";
+    private static final String BASE_URL = "/api/v2/internal/games/quest-suggestions";
     private static final UUID SUGGESTION_ID = UUID.randomUUID();
     private static final UUID USER_ID = UUID.randomUUID();
 
@@ -42,6 +42,7 @@ class QuestSuggestionControllerTest {
     private QuestSuggestionAcceptService questSuggestionAcceptService;
 
     private static QuestView questView() {
+
         return new QuestView(
                 UUID.randomUUID(), "20분 산책하기", Metric.ACTIVE_MINUTES,
                 20, 31, 0, QuestStatus.ACTIVE, 5, Instant.parse("2026-08-28T14:59:59Z"));
