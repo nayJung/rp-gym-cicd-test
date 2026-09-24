@@ -27,7 +27,7 @@ if [ ! -f "${ENV_FILE}" ]; then
     exit 1
 fi
 
-for VAR in ZIPKIN_UI_USER ZIPKIN_UI_PASSWORD_HASH GRAFANA_ROOT_URL
+for VAR in ZIPKIN_UI_USER ZIPKIN_UI_PASSWORD_HASH KAFKA_UI_USER KAFKA_UI_PASSWORD_HASH GRAFANA_ROOT_URL
 do
     if ! grep -qE "^${VAR}=.+" "${ENV_FILE}"; then
         echo "Required environment variable is missing or empty: ${VAR}"
@@ -297,6 +297,7 @@ docker compose -f "${COMPOSE_FILE}" up -d \
     postgres-game \
     postgres-notification \
     kafka \
+    kafka-ui \
     redis \
     prometheus \
     grafana \
