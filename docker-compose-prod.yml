@@ -212,7 +212,7 @@ services:
 
     healthcheck:
       test: ["CMD", "/usr/bin/loki", "-health"]
-      start_period: 180s
+      start_period: 30s
       interval: 10s
       timeout: 5s
       retries: 5
