@@ -121,6 +121,27 @@ services:
     networks:
       - shared-network
 
+  # Kafka UI
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: rp-gym-kafka-ui
+    restart: unless-stopped
+
+    environment:
+      KAFKA_CLUSTERS_0_NAME: rp-gym
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      SERVER_SERVLET_CONTEXT_PATH: /kafka-ui
+
+    expose:
+      - "8080"
+
+    depends_on:
+      kafka:
+        condition: service_started
+
+    networks:
+      - shared-network
+
   # Redis
   redis:
     image: redis:8.8.2
@@ -776,6 +797,8 @@ services:
     environment:
       ZIPKIN_UI_USER: ${ZIPKIN_UI_USER}
       ZIPKIN_UI_PASSWORD_HASH: ${ZIPKIN_UI_PASSWORD_HASH}
+      KAFKA_UI_USER: ${KAFKA_UI_USER}
+      KAFKA_UI_PASSWORD_HASH: ${KAFKA_UI_PASSWORD_HASH}
 
     ports:
       - "80:80"
@@ -784,6 +807,7 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/service-url.inc:/etc/nginx/conf.d/service-url.inc:ro
       - ./nginx/docker-entrypoint.d/40-zipkin-htpasswd.sh:/docker-entrypoint.d/40-zipkin-htpasswd.sh:ro
+      - ./nginx/docker-entrypoint.d/50-kafka-ui-htpasswd.sh:/docker-entrypoint.d/50-kafka-ui-htpasswd.sh:ro
 
     networks:
       - blue-network
