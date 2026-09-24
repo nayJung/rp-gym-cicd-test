@@ -141,6 +141,7 @@ services:
 
     networks:
       - shared-network
+      - blue-network
 
   # Redis
   redis:
