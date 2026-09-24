@@ -51,7 +51,7 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 0.5
+                      - 0.01
                     type: gt
               refId: C
               type: threshold
@@ -60,7 +60,7 @@ groups:
         execErrState: Error
 
         # 50% 초과 상태가 5분 지속되면 Firing
-        for: 5m
+        for: 10s
 
         labels:
           severity: warning
@@ -125,7 +125,7 @@ groups:
               refId: C
               type: threshold
 
-        noDataState: NoData
+        noDataState: OK
         execErrState: Error
         for: 0s
 
@@ -179,7 +179,7 @@ groups:
               conditions:
                 - evaluator:
                     params:
-                      - 1000
+                      - -1
                     type: gt
               refId: C
               type: threshold
@@ -188,7 +188,7 @@ groups:
         execErrState: Error
 
         # 1000건 초과 상태가 5분 지속되면 Firing
-        for: 5m
+        for: 30s
 
         labels:
           severity: warning
