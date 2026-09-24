@@ -274,6 +274,8 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ZIPKIN_MEM_MAX_SPANS: ${{ secrets.ZIPKIN_MEM_MAX_SPANS }}
+          TRACING_SAMPLING_PROBABILITY: ${{ secrets.TRACING_SAMPLING_PROBABILITY }}
           ZIPKIN_UI_USER: ${{ secrets.ZIPKIN_UI_USER }}
           ZIPKIN_UI_PASSWORD_HASH: ${{ secrets.ZIPKIN_UI_PASSWORD_HASH }}
           KAFKA_UI_USER: ${{ secrets.KAFKA_UI_USER }}
@@ -292,6 +294,8 @@ jobs:
             JWT_SECRET
             POSTGRES_PASSWORD
             GEMINI_API_KEY
+            ZIPKIN_MEM_MAX_SPANS
+            TRACING_SAMPLING_PROBABILITY
             ZIPKIN_UI_USER
             ZIPKIN_UI_PASSWORD_HASH
             KAFKA_UI_USER

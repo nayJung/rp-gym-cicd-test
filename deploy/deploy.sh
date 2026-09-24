@@ -34,7 +34,9 @@ for VAR in \
     KAFKA_UI_PASSWORD_HASH \
     GRAFANA_ROOT_URL \
     GRAFANA_ADMIN_USER \
-    GRAFANA_ADMIN_PASSWORD
+    GRAFANA_ADMIN_PASSWORD \
+    ZIPKIN_MEM_MAX_SPANS \
+    TRACING_SAMPLING_PROBABILITY
 do
     if ! grep -qE "^${VAR}=.+" "${ENV_FILE}"; then
         echo "Required environment variable is missing or empty: ${VAR}"
