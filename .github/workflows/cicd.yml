@@ -279,6 +279,8 @@ jobs:
           KAFKA_UI_USER: ${{ secrets.KAFKA_UI_USER }}
           KAFKA_UI_PASSWORD_HASH: ${{ secrets.KAFKA_UI_PASSWORD_HASH }}
           GRAFANA_ROOT_URL: ${{ secrets.GRAFANA_ROOT_URL }}
+          GRAFANA_ADMIN_USER: ${{ secrets.GRAFANA_ADMIN_USER }}
+          GRAFANA_ADMIN_PASSWORD: ${{ secrets.GRAFANA_ADMIN_PASSWORD }}
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_SIGNING_SECRET: ${{ secrets.SLACK_SIGNING_SECRET }}
@@ -295,6 +297,8 @@ jobs:
             KAFKA_UI_USER
             KAFKA_UI_PASSWORD_HASH
             GRAFANA_ROOT_URL
+            GRAFANA_ADMIN_USER
+            GRAFANA_ADMIN_PASSWORD
             SLACK_WEBHOOK_URL
             SLACK_BOT_TOKEN
             SLACK_SIGNING_SECRET

@@ -195,6 +195,10 @@ services:
       GF_SERVER_ROOT_URL: "${GRAFANA_ROOT_URL}"
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
 
+      # Grafana 초기 관리자 계정
+      GF_SECURITY_ADMIN_USER: "${GRAFANA_ADMIN_USER}"
+      GF_SECURITY_ADMIN_PASSWORD: "${GRAFANA_ADMIN_PASSWORD}"
+
       # Slack Alerting에서 사용할 Webhook URL
       SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL}"
 
