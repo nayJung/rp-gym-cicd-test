@@ -56,7 +56,7 @@ groups:
               refId: C
               type: threshold
 
-        noDataState: NoData
+        noDataState: OK
         execErrState: Error
 
         # 50% 초과 상태가 5분 지속되면 Firing
